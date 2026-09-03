@@ -49,6 +49,7 @@ Podrobnosti v [docs/instalace.md](docs/instalace.md).
 | [docs/cli.md](docs/cli.md) | referenční popis všech příkazů a přepínačů |
 | [docs/nastroje.md](docs/nastroje.md) | reference pěti nástrojů: vstupy, výstupy, chyby; jak přidat vlastní |
 | [docs/architektura.md](docs/architektura.md) | jak agent funguje uvnitř — smyčka, pojistky, vrstvy, bezpečnostní návrh |
+| [docs/testy.md](docs/testy.md) | co se testuje, podvržené LLM, jak psát nové testy |
 | [docs/mereni.md](docs/mereni.md) | naměřené srovnání osmi konfigurací, metodika, poznatky |
 
 ## Co agent umí
@@ -76,7 +77,7 @@ jsou v `.gitignore`.
 ## Vývoj
 
 ```bash
-uv run pytest -q          # 73 testů, běží bez API klíče i bez modelu
+uv run pytest -q          # 86 testů, běží bez API klíče i bez modelu
 uvx ruff check src tests  # linter
 ```
 
@@ -90,7 +91,7 @@ src/timeagent/
   bench.py               srovnání modelů na pevné sadě dotazů
   cli.py                 příkazová řádka
   importers/clockify.py  volitelný import reálných dat
-tests/
+tests/                   86 testů, podrobnosti v docs/testy.md
 ```
 
 `tools.py` a `db.py` neimportují nic z LiteLLM ani ze SDK poskytovatele — dají se

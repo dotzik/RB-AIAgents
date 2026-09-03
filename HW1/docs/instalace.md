@@ -148,7 +148,7 @@ export TIMEAGENT_DB=D:/data/vykazy.sqlite     # totéž natrvalo
 ## Ověření instalace
 
 ```bash
-uv run pytest -q          # 73 testů; nepotřebují API klíč ani běžící model
+uv run pytest -q          # 86 testů; nepotřebují API klíč ani běžící model
 uv run timeagent tools    # výpis nástrojů — nepotřebuje model
 uv run timeagent ask "Kolik mám projektů?"   # první skutečné volání modelu
 ```
