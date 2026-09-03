@@ -1,0 +1,28 @@
+[project]
+name = "timeagent"
+version = "0.1.0"
+description = "ReAct agent nad výkazy odpracovaného času — HW1, kurz AI Agents"
+requires-python = ">=3.12"
+dependencies = [
+    "litellm>=1.74.9",
+    "python-dotenv>=1.0.1",
+    "httpx>=0.27.0",
+]
+
+[project.scripts]
+timeagent = "timeagent.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/timeagent"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

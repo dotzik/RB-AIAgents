@@ -1,0 +1,23 @@
+# Prostředí a tajemství
+.env
+.venv/
+venv/
+
+# Data — do repozitáře nepatří žádná reálná ani vygenerovaná databáze
+*.sqlite
+*.sqlite3
+*.db
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Editory
+.vscode/
+.idea/
