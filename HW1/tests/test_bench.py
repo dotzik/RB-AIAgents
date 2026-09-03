@@ -84,3 +84,43 @@ def test_rows_are_serialisable(demo_db):
 
     rows = bench.as_rows([bench.Outcome("m", "faktura", True, 1.5, 2, 1, 10, "ok")])
     assert json.loads(json.dumps(rows))[0]["model"] == "m"
+
+
+def test_compare_covers_whole_month_not_first_28_days(demo_db, monkeypatch):
+    """Očekávané hodnoty musí sedět s tím, co nástroj vrátí modelu.
+
+    Regrese: dřív se rozsah počítal jako 1.–28., takže věcně správné odpovědi
+    za celý měsíc padaly jako chybné.
+    """
+    from timeagent import tools
+
+    monkeypatch.setenv("TIMEAGENT_BENCH_MONTH", "2026-08")
+    july, august = bench._compare()
+
+    for month, expected in (("2026-07", july), ("2026-08", august)):
+        first, last = tools._month_bounds(month)
+        rows = tools.summarize_by("project", first, last)["groups"]
+        assert sorted(expected) == sorted(r["hours"] for r in rows)
+
+    # a doopravdy jde o víc než prvních 28 dní
+    partial = tools.summarize_by("project", "2026-08-01", "2026-08-28")["groups"]
+    assert sorted(august) != sorted(r["hours"] for r in partial)
+
+
+def test_comparison_question_names_both_months(demo_db, monkeypatch):
+    """Zadání nesmí být dvojznačné vůči dnešnímu datu.
+
+    Regrese: otázka zněla „předchozí měsíc", což je vůči dnešku něco jiného než
+    měsíc, na kterém se měří — model pak správně namítl rozpor a byl za to
+    ohodnocen jako chybující.
+    """
+    monkeypatch.setenv("TIMEAGENT_BENCH_MONTH", "2026-08")
+    question = next(c.question for c in bench.cases() if c.key == "porovnani")
+    assert "2026-07" in question
+    assert "2026-08" in question
+    assert "předchozí měsíc" not in question
+
+
+def test_previous_month_crosses_year_boundary():
+    assert bench._previous_month("2026-01") == "2025-12"
+    assert bench._previous_month("2026-08") == "2026-07"

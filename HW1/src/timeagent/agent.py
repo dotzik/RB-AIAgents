@@ -19,6 +19,8 @@ from typing import Any, Callable
 from . import llm, tools
 
 MAX_ITERATIONS = 8
+# Kolikrát smíme za model spustit nástroj, který napsal jen jako text.
+MAX_TEXTUAL_RESCUES = 2
 
 SYSTEM_PROMPT = """\
 Jsi asistent pro analýzu výkazů odpracovaného času. Odpovídáš česky, stručně a věcně.
@@ -95,6 +97,43 @@ def _arguments_to_dict(raw: Any) -> dict[str, Any]:
 
 def _arguments_to_str(raw: Any) -> str:
     return raw if isinstance(raw, str) else json.dumps(raw or {}, ensure_ascii=False)
+
+
+def parse_textual_tool_call(content: str | None) -> tuple[str, dict[str, Any]] | None:
+    """Rozpozná volání nástroje, které model napsal jako text.
+
+    Slabší modely občas místo skutečného `tool_calls` vypíšou jeho JSON do
+    odpovědi. Turn formálně skončí bez volání nástroje, takže by se ten text
+    vrátil uživateli jako výsledek. Tady se z něj vytáhne jméno a argumenty,
+    aby smyčka mohla pokračovat.
+
+    Rozpozná dva tvary: OpenAI (`{"function": {"name": ..., "arguments": ...}}`)
+    a plochý (`{"name": ..., "arguments"/"parameters": {...}}`).
+    """
+    if not content:
+        return None
+    text = content.strip()
+    start, end = text.find("{"), text.rfind("}")
+    if start == -1 or end <= start:
+        return None
+    try:
+        payload = json.loads(text[start : end + 1])
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+
+    body = payload.get("function") if isinstance(payload.get("function"), dict) else payload
+    name = body.get("name")
+    if not isinstance(name, str) or name not in tools.REGISTRY:
+        return None
+    arguments = body.get("arguments", body.get("parameters", {}))
+    if isinstance(arguments, str):
+        try:
+            arguments = json.loads(arguments)
+        except (TypeError, ValueError):
+            return None
+    return (name, arguments) if isinstance(arguments, dict) else None
 
 
 class ReactAgent:
@@ -193,6 +232,7 @@ class ReactAgent:
 
         result = AgentResult(answer="", model=self.model, messages=messages)
         repeated_only = 0
+        rescues = 0
 
         for iteration in range(1, self.max_iterations + 1):
             self._emit(f"\n--- krok {iteration} ---")
@@ -207,6 +247,28 @@ class ReactAgent:
             content = getattr(message, "content", None)
 
             if not tool_calls:
+                textual = parse_textual_tool_call(content)
+                if textual and rescues < MAX_TEXTUAL_RESCUES:
+                    # Model napsal volání nástroje jako text. Spustíme ho za něj
+                    # a výsledek vrátíme do konverzace, ať turn nepřijde vniveč.
+                    rescues += 1
+                    name, arguments = textual
+                    self._emit("  model napsal volání nástroje jako text — spouštím ho")
+                    step = self._execute(name, arguments, iteration)
+                    result.steps.append(step)
+                    self._emit_step(step)
+                    messages.append({"role": "assistant", "content": content or ""})
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            f"Nástroj {name} jsem spustil za tebe, tady je výsledek: "
+                            + json.dumps(step.result, ensure_ascii=False, default=str)
+                            + " Příště nástroj volej přes tool calling, ne textem. "
+                            "Teď pokračuj."
+                        ),
+                    })
+                    continue
+
                 self._emit("  hotovo — model už nepotřebuje nástroj")
                 result.answer = (content or "").strip()
                 result.iterations = iteration

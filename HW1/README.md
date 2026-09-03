@@ -43,14 +43,30 @@ běžně. Proto:
 |---|---|
 | Nástroj vyhodí výjimku | vrátí se modelu jako `{"error": ...}`, ne pád — může se opravit |
 | Model pošle `"true"` / `"null"` jako řetězec | narovná se podle typu ve schématu |
+| Model napíše volání nástroje **jako text** | rozpozná se, nástroj se spustí za něj a výsledek jde zpět do konverzace |
 | Model volá dokola totéž | výsledek se vrátí z paměti s poznámkou, nástroj se nespouští znovu |
 | Model se točí dál | po druhém opakování se smyčka ukončí a vynutí se odpověď **bez nástrojů** |
 | Nic z toho nezabere | strop 8 kroků |
 
-Poslední dvě jsou ta zajímavá: když se model netrhne od nástrojů, dostane
-poslední volání, ve kterém mu nástroje vůbec nenabídneme. Podklady v konverzaci
-už má, takže mu nezbyde než odpovědět textem. Bez toho běh skončí bez odpovědi —
-což je přesně to, co dělal `llama3.2:3b`, než tahle pojistka vznikla.
+Každá z nich vznikla z konkrétního selhání při měření, ne z teorie. Dvě stojí
+za vysvětlení:
+
+**Volání nástroje jako text.** `qwen2.5` na Ollamě — ve 14B i 32B verzi shodně —
+místo skutečného `tool_calls` občas vypíše jeho JSON do odpovědi:
+
+```json
+{"function": {"name": "summarize_by", "arguments": {"dimension": "project", ...}}}
+```
+
+Turn tím formálně skončí bez volání nástroje, takže by se tenhle text vrátil
+uživateli jako výsledek. Agent ho proto rozpozná, nástroj **spustí za model**,
+výsledek vrátí do konverzace a připomene, ať příště použije tool calling.
+Nejvýš dvakrát za běh, aby se z berličky nestal nekonečný cyklus.
+
+**Vynucený závěr.** Když se model netrhne od nástrojů, dostane poslední volání,
+ve kterém mu nástroje vůbec nenabídneme. Podklady už má, takže mu nezbyde než
+odpovědět textem. Bez toho běh skončí bez odpovědi — přesně to dělal
+`llama3.2:3b`, než tahle pojistka vznikla.
 
 ### Příklad průběhu
 
@@ -139,7 +155,7 @@ v `.env`, ne v kódu:
 
 ```bash
 # lokálně, zdarma
-TIMEAGENT_MODEL=ollama/llama3.2:3b
+TIMEAGENT_MODEL=ollama/qwen2.5:14b
 TIMEAGENT_API_BASE=http://localhost:11434
 
 # nebo cloud, beze změny jediného řádku kódu
@@ -165,14 +181,38 @@ dvou období) a ověří, jestli v odpovědi zazněla správná čísla. Očeká
 čtou **přímo z databáze**, ne z konstant, takže kontrola platí i po přegenerování dat.
 Výstupem je markdownová tabulka.
 
+#### Nejdřív ale musel projít testem samotný benchmark
+
+První kolo měření vypadalo drtivě: *porovnání dvou měsíců* neprošlo **žádnému**
+modelu, od 3B až po Opus. Takový výsledek je podezřelý sám o sobě — a taky byl.
+Chyba byla dvakrát na mé straně:
+
+1. **Očekávané hodnoty se počítaly jen do 28. dne měsíce.** Modely správně
+   hlásily celý měsíc, scorer je porovnával s useknutým obdobím a označoval
+   za chybné. Po opravě dává Haiku 4.5 plný počet.
+2. **Zadání bylo dvojznačné.** Otázka zněla „porovnej *předchozí měsíc* a 2026-08",
+   jenže měřeno bylo v září — takže „předchozí měsíc" *byl* srpen. Sonnet 5 to
+   jako jediný poznal a místo hádání napsal, že zadání si protiřečí. Byl za to
+   ohodnocen jako chybující.
+
+Druhý bod stojí za zapamatování: **model, který si všiml vady v zadání, byl
+potrestán víc než modely, které ji ignorovaly a odpověděly nesmysl.** Špatně
+navržená metrika si tenhle druh chování vypěstuje. Obě chyby teď hlídá regresní
+test (`test_compare_covers_whole_month_not_first_28_days`,
+`test_comparison_question_names_both_months`).
+
 Naměřeno na demo datech (`seed`, srpen 2026), stejná sada dotazů pro všechny:
 
-| Backend | Model | faktura | kapacita | porovnání | skóre | čas |
+| Backend | Model | faktura | kapacita | porovnání | čas | tokeny |
 |---|---|---|---|---|---|---|
-| DGX Spark (GB10) | `qwen2.5:14b` | ✅ | ✅ | ❌ | 2/3 | **41 s** |
-| Arc 140T (LM Studio, Vulkan) | `qwen3-4b-2507` | ✅ | ✅ | ❌ | 2/3 | 153 s |
-| CPU (Core Ultra 7 255H) | `qwen2.5:7b` | ✅ | ❌ | ✅ | 2/3 | 625 s |
-| CPU (Core Ultra 7 255H) | `llama3.2:3b` | ❌ | ✅ | ❌ | 1/3 | 928 s |
+| Anthropic API | `claude-haiku-4-5` | ✅ | ✅ | ✅ | **18 s** | 15 222 |
+| Anthropic API | `claude-sonnet-5` | ✅ | ✅ | ✅ | 19 s | 16 905 |
+| Anthropic API | `claude-opus-5` | ✅ | ✅ | ✅ | 21 s | 16 379 |
+| DGX Spark (GB10) | `qwen2.5:14b` | ✅ | ✅ | ✅ | 46 s | 23 482 |
+| DGX Spark (GB10) | `qwen2.5:32b` | ✅ | ✅ | ✅ | 72 s | **14 310** |
+| Arc 140T (LM Studio) | `qwen3-4b-2507` | ✅ | ✅ | ✅ | 165 s | 17 157 |
+| CPU (Core Ultra 7) | `qwen2.5:7b` | ✅ | ❌ | ✅ | 689 s | 27 312 |
+| CPU (Core Ultra 7) | `llama3.2:3b` | ❌ | ❌ | ❌ | 321 s | 21 267 |
 
 Obtížnost dotazů stoupá: *faktura* je jedno volání nástroje, *kapacita* chce dvě
 čísla v jedné větě, *porovnání* dvě volání a udržet přitom, které číslo patří
@@ -180,12 +220,21 @@ ke kterému měsíci.
 
 Co z toho plyne:
 
-- **Rychlost je otázka hardwaru, správnost otázka modelu.** Spark je proti CPU
-  patnáctkrát rychlejší, ale skóre má stejné jako 4B model na integrované grafice.
-- **Žádný z testovaných modelů nedal 3/3.** A každý selhal jinde — `qwen2.5:7b`
-  jako jediný zvládl porovnání dvou měsíců, zato pohořel na jednodušší kapacitě.
-- **Časy na CPU jsou horní odhad** — měřeno, když byl v paměti současně model
-  v LM Studiu. Samotné CPU by bylo rychlejší, pořadí se tím ale nemění.
+- **Hranice použitelnosti leží kolem 4B.** Od `qwen3-4b` výš prošlo všechno;
+  `llama3.2:3b` nedal ani jeden dotaz. Není to plynulý přechod — je to zlom.
+- **Nad tou hranicí velikost nerozhoduje.** 4B, 14B, 32B i Opus dávají shodně
+  3/3. Liší se rychlostí a spotřebou, ne správností.
+- **Tokeny prozrazují víc než skóre.** `qwen2.5:32b` došel k cíli na 14 310
+  tokenů, `14b` potřeboval 23 482 — víc kroků, víc oprav, menší rezerva. Obojí
+  je ✅, ale ne stejně pohodlně.
+- **Rychlost je věc hardwaru.** Tentýž agent: 18 s přes API, 46 s na Sparku,
+  165 s na integrované grafice, 689 s na CPU. Model se nemění, mění se železo.
+- **Malé modely kolísají.** `llama3.2:3b` dal v jednom kole 1/3, v druhém 0/3.
+  Jedno měření u modelů na hraně nestačí.
+
+Poznámka k poctivosti: tři dotazy v jednom běhu jsou tenký důkaz. Tabulka říká,
+co který model zvládl **tady a teď**, ne co zvládne obecně. Rozšířit sadu
+znamená přidat záznam do `cases()` v [`bench.py`](src/timeagent/bench.py).
 
 ### Kde to běží: poznámky k hardwaru
 
@@ -270,8 +319,9 @@ uv run timeagent seed                     # vygeneruje demo databázi
 uv run timeagent ask "kolik hodin jsem odpracoval minulý měsíc?"
 ```
 
-Bez API klíče: nainstaluj [Ollama](https://ollama.com/), `ollama pull llama3.2:3b`
-a nech `.env` ve výchozím stavu.
+Bez API klíče: nainstaluj [Ollama](https://ollama.com/), `ollama pull qwen2.5:14b`
+a nech `.env` ve výchozím stavu. **Menší modely nestačí** — `llama3.2:3b` v měření
+nezvládl ani jeden ze tří dotazů, viz [Srovnání modelů](#srovnání-modelů).
 
 | Příkaz | Co dělá |
 |---|---|
@@ -331,9 +381,9 @@ zakopnou až při formulaci odpovědi. Pozorované způsoby, jak to pokazit:
 - **záměna veličin** — „nafakturoval jsi 62,00 Kč", kde 62 jsou hodiny, ne koruny
 - **syrový JSON místo věty** — `{"total_hours": 179.5, "difference": 19.5}`
   jako finální odpověď uživateli
-- **tool call jako text** — `qwen2.5:14b` vypsal do odpovědi JSON s `"function":
-  {"name": "summarize_by", ...}`, tedy volání nástroje napsal jako text, místo
-  aby ho skutečně provedl
+- **tool call jako text** — `qwen2.5` ve 14B i 32B vypsal do odpovědi JSON
+  s `"function": {"name": "summarize_by", ...}` místo aby nástroj skutečně
+  zavolal (na tohle už smyčka umí zareagovat, viz Pojistky)
 
 Žádná z těch chyb není chyba smyčky — ta drží. Je to strop modelu. Proto
 `timeagent bench` kontroluje **čísla ve finální odpovědi**, ne to, jestli nástroj

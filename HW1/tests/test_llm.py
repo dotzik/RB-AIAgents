@@ -48,3 +48,17 @@ def test_usage_handles_missing_usage():
     assert llm.usage_of(
         SimpleNamespace(usage=SimpleNamespace(prompt_tokens=5, completion_tokens=7))
     ) == (5, 7)
+
+
+def test_workspace_header_only_for_anthropic(monkeypatch):
+    """Identity-linked klíč potřebuje workspace; ostatní poskytovatelé ne."""
+    monkeypatch.setenv("ANTHROPIC_WORKSPACE_ID", "wrkspc_test")
+    assert llm.extra_headers_for("anthropic/claude-haiku-4-5") == {
+        "anthropic-workspace-id": "wrkspc_test"
+    }
+    assert llm.extra_headers_for("ollama/llama3.2:3b") is None
+
+
+def test_no_workspace_header_when_unset(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_WORKSPACE_ID", raising=False)
+    assert llm.extra_headers_for("anthropic/claude-haiku-4-5") is None

@@ -253,3 +253,76 @@ def test_different_arguments_are_not_treated_as_repeat(demo_db):
     result = ReactAgent(complete_fn=fake, trace=False).run("?")
     assert [s.repeated for s in result.steps] == [False, False]
     assert result.answer == "porovnáno"
+
+
+# --------------------------------------------------------------------------
+# Volání nástroje napsané jako text
+# --------------------------------------------------------------------------
+
+def test_parses_openai_shaped_textual_call():
+    from timeagent.agent import parse_textual_tool_call
+
+    text = ('{"id": "call_1", "type": "function", "function": {"name": "summarize_by", '
+            '"arguments": {"dimension": "project", "date_from": "2026-08-01", '
+            '"date_to": "2026-08-31"}}}')
+    assert parse_textual_tool_call(text) == (
+        "summarize_by",
+        {"dimension": "project", "date_from": "2026-08-01", "date_to": "2026-08-31"},
+    )
+
+
+def test_parses_flat_shaped_textual_call():
+    from timeagent.agent import parse_textual_tool_call
+
+    assert parse_textual_tool_call('{"name": "list_projects", "parameters": {}}') == (
+        "list_projects", {},
+    )
+
+
+def test_parses_call_wrapped_in_prose():
+    from timeagent.agent import parse_textual_tool_call
+
+    text = 'Zavolám nástroj: {"name": "capacity_check", "arguments": {"month": "2026-08"}}'
+    assert parse_textual_tool_call(text) == ("capacity_check", {"month": "2026-08"})
+
+
+def test_normal_answer_is_not_mistaken_for_a_call():
+    from timeagent.agent import parse_textual_tool_call
+
+    assert parse_textual_tool_call("V srpnu jsi odpracoval 179,5 hodiny.") is None
+    assert parse_textual_tool_call('{"total_hours": 179.5}') is None   # výsledek, ne volání
+    assert parse_textual_tool_call('{"name": "neznamy_nastroj"}') is None
+    assert parse_textual_tool_call(None) is None
+
+
+def test_textual_call_is_executed_and_fed_back(demo_db):
+    """Reálné chování qwen2.5 na Ollamě: volání vypsané jako text."""
+    fake = FakeLLM([
+        _response(content='{"function": {"name": "capacity_check", '
+                          '"arguments": {"month": "2026-08"}}}'),
+        _response(content="V srpnu jsi odpracoval dost."),
+    ])
+    result = ReactAgent(complete_fn=fake, trace=False).run("?")
+
+    assert [s.tool for s in result.steps] == ["capacity_check"]
+    assert result.answer == "V srpnu jsi odpracoval dost."
+    # výsledek se modelu vrátil a je v něm nabádání používat tool calling
+    followup = [m for m in fake.calls[1] if m["role"] == "user"][-1]["content"]
+    assert "total_hours" in followup
+    assert "tool calling" in followup
+
+
+def test_textual_call_rescue_is_limited(demo_db):
+    """Model, který text posílá pořád, nesmí smyčku držet donekonečna."""
+    stubborn = FakeLLM([
+        _response(content='{"name": "capacity_check", "arguments": {"month": "2026-0%d"}}'
+                          % (i + 1))
+        for i in range(6)
+    ])
+    result = ReactAgent(complete_fn=stubborn, trace=False).run("?")
+
+    from timeagent.agent import MAX_TEXTUAL_RESCUES
+
+    assert len(result.steps) == MAX_TEXTUAL_RESCUES
+    # po vyčerpání záchran se text vrátí tak, jak přišel
+    assert result.answer.startswith("{")

@@ -14,7 +14,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DEFAULT_MODEL = "ollama/llama3.2:3b"
+# Menší modely tool calling v této úloze nezvládají — viz README, Srovnání modelů.
+DEFAULT_MODEL = "ollama/qwen2.5:14b"
 
 
 def _env(specific: str, generic: str) -> str | None:
@@ -48,6 +49,19 @@ def api_base_for(model: str) -> str | None:
     return base
 
 
+def extra_headers_for(model: str) -> dict[str, str] | None:
+    """Hlavičky navíc pro daný model.
+
+    Klíče Anthropicu navázané na identitu (identity-linked) vyžadují u každého
+    požadavku hlavičku `anthropic-workspace-id` — bez ní API vrátí 400. Běžné
+    klíče ji nepotřebují, proto se posílá jen když je workspace v prostředí.
+    """
+    workspace = os.environ.get("ANTHROPIC_WORKSPACE_ID")
+    if workspace and model.startswith("anthropic/"):
+        return {"anthropic-workspace-id": workspace}
+    return None
+
+
 class LLMError(RuntimeError):
     """Volání modelu selhalo — s nápovědou, co bývá příčinou."""
 
@@ -75,6 +89,9 @@ def complete(
     base = api_base_for(kwargs["model"])
     if base:
         kwargs["api_base"] = base
+    headers = extra_headers_for(kwargs["model"])
+    if headers:
+        kwargs["extra_headers"] = headers
 
     try:
         return litellm.completion(**kwargs)

@@ -58,11 +58,13 @@ def _compare() -> list[list[float]]:
     úplnosti, jen na tom, že čísla jsou z toho správného měsíce.
     """
     month = _bench_month()
-    year, mon = (int(x) for x in month.split("-"))
-    prev = f"{year}-{mon - 1:02d}" if mon > 1 else f"{year - 1}-12"
+    prev = _previous_month(month)
     groups: list[list[float]] = []
     for m in (prev, month):
-        rows = tools.summarize_by("project", f"{m}-01", f"{m}-28")["groups"]
+        # Celý měsíc, ne prvních 28 dní — jinak by očekávané hodnoty nesouhlasily
+        # s tím, co nástroj vrátí modelu, a správné odpovědi by padaly jako chybné.
+        first, last = tools._month_bounds(m)
+        rows = tools.summarize_by("project", first, last)["groups"]
         groups.append([r["hours"] for r in rows] or [0.0])
     return groups
 
@@ -72,8 +74,14 @@ def _bench_month() -> str:
     return os.environ.get("TIMEAGENT_BENCH_MONTH", "2026-08")
 
 
+def _previous_month(month: str) -> str:
+    year, mon = (int(x) for x in month.split("-"))
+    return f"{year}-{mon - 1:02d}" if mon > 1 else f"{year - 1}-12"
+
+
 def cases() -> list[Case]:
     month = _bench_month()
+    prev = _previous_month(month)
     return [
         Case(
             "faktura",
@@ -89,7 +97,10 @@ def cases() -> list[Case]:
         ),
         Case(
             "porovnani",
-            f"Porovnej předchozí měsíc a {month} podle projektů.",
+            # Oba měsíce se jmenují výslovně. Dřív tu stálo „předchozí měsíc",
+            # což je vůči dnešku dvojznačné — Sonnet 5 na ten rozpor správně
+            # upozornil místo aby hádal, a spadl na tom jako na chybě.
+            f"Porovnej {prev} a {month} podle projektů.",
             _compare,
             "dvě volání, srovnání období",
         ),
