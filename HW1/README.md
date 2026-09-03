@@ -332,10 +332,11 @@ nezvládl ani jeden ze tří dotazů, viz [Srovnání modelů](#srovnání-model
 | `timeagent bench` | srovná modely na stejné sadě dotazů (`--models`, `--api-base`) |
 | `timeagent import` | volitelně načte reálná data z Clockify |
 
-## Testy
+## Testy a statická kontrola
 
 ```bash
-uv run pytest -q
+uv run pytest -q          # 73 testů
+uvx ruff check src tests  # linter, konfigurace v pyproject.toml
 ```
 
 Celá suite běží **bez API klíče a bez běžícího modelu** — smyčka agenta se testuje

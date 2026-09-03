@@ -26,3 +26,13 @@ packages = ["src/timeagent"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 95
+
+[tool.ruff.lint]
+extend-select = ["UP", "SIM", "RUF", "DTZ", "B", "C4", "I"]
+# Výkazy času jsou vedené v místních kalendářních dnech, ne v okamžicích v UTC —
+# `date.today()` i naivní `strptime` jsou tu záměr, ne opomenutí.
+# Projekt je psaný česky — pomlčky a nezlomitelné mezery jsou záměr typografie.
+ignore = ["DTZ007", "DTZ011", "RUF001", "RUF002", "RUF003"]

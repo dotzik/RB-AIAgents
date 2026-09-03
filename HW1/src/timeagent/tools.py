@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import calendar
 import sqlite3
+from collections.abc import Callable
+from contextlib import closing, suppress
 from datetime import date, datetime
-from typing import Any, Callable
+from typing import Any
 
 from . import db
 
@@ -32,17 +34,23 @@ def _parse_date(value: str, field: str) -> str:
     except (ValueError, TypeError):
         raise ToolError(
             f"{field}: očekávám datum ve formátu YYYY-MM-DD, dostal jsem {value!r}"
-        )
+        ) from None
 
 
 def _month_bounds(month: str) -> tuple[str, str]:
+    """První a poslední den měsíce jako ISO data."""
     try:
         year, mon = (int(x) for x in str(month).split("-"))
         first = date(year, mon, 1)
     except (ValueError, TypeError):
-        raise ToolError(f"month: očekávám formát YYYY-MM, dostal jsem {month!r}")
+        raise ToolError(f"month: očekávám formát YYYY-MM, dostal jsem {month!r}") from None
     last = date(year, mon, calendar.monthrange(year, mon)[1])
     return first.isoformat(), last.isoformat()
+
+
+def _normalize_month(month: str) -> str:
+    """`2026-8` na `2026-08` — ať výstup nekopíruje překlepy ze vstupu."""
+    return _month_bounds(month)[0][:7]
 
 
 def _resolve_project(conn: sqlite3.Connection, needle: str) -> sqlite3.Row:
@@ -53,9 +61,18 @@ def _resolve_project(conn: sqlite3.Connection, needle: str) -> sqlite3.Row:
         "SELECT * FROM projects WHERE lower(id) = lower(?)", (needle,)
     ).fetchall()
     if not rows:
-        like = f"%{needle.lower()}%"
+        # % a _ ve vstupu jsou hledaný text, ne zástupné znaky vzoru
+        escaped = (
+            needle.lower()
+            .replace("!", "!!")
+            .replace("%", "!%")
+            .replace("_", "!_")
+        )
+        like = f"%{escaped}%"
         rows = conn.execute(
-            "SELECT * FROM projects WHERE lower(name) LIKE ? OR lower(client) LIKE ?",
+            "SELECT * FROM projects "
+            "WHERE lower(name) LIKE ? ESCAPE '!' "
+            "OR lower(client) LIKE ? ESCAPE '!'",
             (like, like),
         ).fetchall()
     if not rows:
@@ -85,7 +102,7 @@ def _billable_clause(billable: bool | None) -> tuple[str, list[Any]]:
 
 def list_projects(active_only: bool = False) -> dict[str, Any]:
     """Seznam projektů včetně klientů a hodinových sazeb."""
-    with db.connect_ro() as conn:
+    with closing(db.connect_ro()) as conn:
         sql = "SELECT id, name, client, hourly_rate, currency, active FROM projects"
         if active_only:
             sql += " WHERE active = 1"
@@ -111,7 +128,7 @@ def query_time_entries(
         raise ToolError("date_from je pozdější než date_to")
     limit = max(0, min(int(limit), 50))
 
-    with db.connect_ro() as conn:
+    with closing(db.connect_ro()) as conn:
         where = "WHERE e.date BETWEEN ? AND ?"
         params: list[Any] = [date_from, date_to]
         proj_row = None
@@ -135,7 +152,7 @@ def query_time_entries(
                        e.billable, e.tag
                 FROM time_entries e JOIN projects p ON p.id = e.project_id
                 {where} ORDER BY e.date DESC LIMIT ?""",
-            params + [limit],
+            [*params, limit],
         ).fetchall()
 
     return {
@@ -176,7 +193,7 @@ def summarize_by(
     date_to = _parse_date(date_to, "date_to")
     expr = _DIMENSIONS[dimension]  # z whitelistu, ne od modelu
 
-    with db.connect_ro() as conn:
+    with closing(db.connect_ro()) as conn:
         where = "WHERE e.date BETWEEN ? AND ?"
         params: list[Any] = [date_from, date_to]
         if project:
@@ -212,14 +229,15 @@ def compute_invoice(project: str, month: str, vat_rate: float = 0.21) -> dict[st
     Počítá jen fakturovatelné (`billable`) záznamy.
     """
     date_from, date_to = _month_bounds(month)
+    month = _normalize_month(month)
     try:
         vat_rate = float(vat_rate)
     except (TypeError, ValueError):
-        raise ToolError(f"vat_rate: očekávám číslo, dostal jsem {vat_rate!r}")
+        raise ToolError(f"vat_rate: očekávám číslo, dostal jsem {vat_rate!r}") from None
     if not 0 <= vat_rate < 1:
         raise ToolError("vat_rate: sazba je desetinné číslo, např. 0.21 pro 21 %")
 
-    with db.connect_ro() as conn:
+    with closing(db.connect_ro()) as conn:
         proj = _resolve_project(conn, project)
         row = conn.execute(
             """SELECT COALESCE(SUM(hours), 0) AS hours, COUNT(*) AS entries
@@ -250,14 +268,17 @@ def compute_invoice(project: str, month: str, vat_rate: float = 0.21) -> dict[st
 def capacity_check(month: str, target_hours: float = 160.0) -> dict[str, Any]:
     """Porovná odpracované hodiny v měsíci proti cíli — kolik chybí nebo přebývá."""
     date_from, date_to = _month_bounds(month)
+    month = _normalize_month(month)
     try:
         target = float(target_hours)
     except (TypeError, ValueError):
-        raise ToolError(f"target_hours: očekávám číslo, dostal jsem {target_hours!r}")
+        raise ToolError(
+            f"target_hours: očekávám číslo, dostal jsem {target_hours!r}"
+        ) from None
     if target <= 0:
         raise ToolError("target_hours musí být kladné číslo")
 
-    with db.connect_ro() as conn:
+    with closing(db.connect_ro()) as conn:
         row = conn.execute(
             """SELECT COALESCE(SUM(hours), 0) AS total,
                       COALESCE(SUM(CASE WHEN billable = 1 THEN hours END), 0) AS billable,
@@ -447,10 +468,10 @@ def coerce_arguments(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 elif lowered in {"false", "no", "0"}:
                     value = False
             elif expected in {"number", "integer"}:
-                try:
+                # Nepřevoditelnou hodnotu necháme být — nástroj si na ni
+                # postěžuje sám a s vlastní, srozumitelnější hláškou.
+                with suppress(ValueError):
                     value = float(value) if expected == "number" else int(float(value))
-                except ValueError:
-                    pass  # ať si na tom nástroj postěžuje sám, s vlastní hláškou
         elif value is None:
             continue
         out[key] = value

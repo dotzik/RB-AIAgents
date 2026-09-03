@@ -55,13 +55,17 @@ def connect_rw(path: Path | None = None) -> sqlite3.Connection:
 
 
 def connect_ro(path: Path | None = None) -> sqlite3.Connection:
-    """Read-only spojení — touto cestou chodí všechny nástroje agenta."""
-    p = path or default_db_path()
+    """Read-only spojení — touto cestou chodí všechny nástroje agenta.
+
+    Použij přes `with closing(connect_ro()) as conn`. Samotné `with conn` by
+    řídilo transakci, ne životnost spojení, a to je tady matoucí.
+    """
+    p = (path or default_db_path()).resolve()
     if not p.exists():
         raise FileNotFoundError(
             f"Databáze {p} neexistuje. Vytvoř ji příkazem `uv run timeagent seed`."
         )
-    conn = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True)
+    conn = sqlite3.connect(f"{p.as_uri()}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -72,4 +76,5 @@ def init_schema(conn: sqlite3.Connection) -> None:
 
 
 def rows_to_dicts(rows: list[sqlite3.Row]) -> list[dict[str, Any]]:
+    """Řádky na obyčejné dicty, aby šly serializovat do JSON pro model."""
     return [dict(r) for r in rows]

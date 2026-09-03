@@ -15,8 +15,9 @@ from __future__ import annotations
 import os
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from . import agent as agent_mod
 from . import llm, tools
@@ -55,14 +56,13 @@ def _compare() -> list[list[float]]:
     """Za každý z obou měsíců musí zaznít hodiny aspoň jednoho projektu.
 
     Model si může vybrat, které projekty vypíchne — netrváme na pořadí ani na
-    úplnosti, jen na tom, že čísla jsou z toho správného měsíce.
+    úplnosti, jen na tom, že čísla jsou z toho správného měsíce. Rozsah je vždy
+    celý měsíc, aby očekávané hodnoty seděly s tím, co nástroj vrátí modelu.
     """
     month = _bench_month()
     prev = _previous_month(month)
     groups: list[list[float]] = []
     for m in (prev, month):
-        # Celý měsíc, ne prvních 28 dní — jinak by očekávané hodnoty nesouhlasily
-        # s tím, co nástroj vrátí modelu, a správné odpovědi by padaly jako chybné.
         first, last = tools._month_bounds(m)
         rows = tools.summarize_by("project", first, last)["groups"]
         groups.append([r["hours"] for r in rows] or [0.0])
@@ -97,9 +97,7 @@ def cases() -> list[Case]:
         ),
         Case(
             "porovnani",
-            # Oba měsíce se jmenují výslovně. Dřív tu stálo „předchozí měsíc",
-            # což je vůči dnešku dvojznačné — Sonnet 5 na ten rozpor správně
-            # upozornil místo aby hádal, a spadl na tom jako na chybě.
+            # Oba měsíce výslovně: „předchozí měsíc" by bylo dvojznačné vůči dnešku.
             f"Porovnej {prev} a {month} podle projektů.",
             _compare,
             "dvě volání, srovnání období",

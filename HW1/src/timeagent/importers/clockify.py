@@ -18,7 +18,7 @@ import calendar
 import os
 import re
 import sqlite3
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Any
 
 import httpx
@@ -53,12 +53,12 @@ def parse_duration(value: str | None) -> float:
 def _month_bounds(month: str) -> tuple[datetime, datetime]:
     try:
         year, mon = (int(x) for x in month.split("-"))
-    except ValueError:
-        raise ClockifyError(f"month: očekávám YYYY-MM, dostal jsem {month!r}")
+    except ValueError as exc:
+        raise ClockifyError(f"month: očekávám YYYY-MM, dostal jsem {month!r}") from exc
     last_day = calendar.monthrange(year, mon)[1]
     return (
-        datetime(year, mon, 1, tzinfo=timezone.utc),
-        datetime(year, mon, last_day, 23, 59, 59, tzinfo=timezone.utc),
+        datetime(year, mon, 1, tzinfo=UTC),
+        datetime(year, mon, last_day, 23, 59, 59, tzinfo=UTC),
     )
 
 
@@ -70,7 +70,7 @@ class ClockifyClient:
         self.workspace_id = workspace_id
 
     @classmethod
-    def from_env(cls) -> "ClockifyClient":
+    def from_env(cls) -> ClockifyClient:
         key = os.environ.get("CLOCKIFY_API_KEY")
         if not key:
             raise ClockifyError(
@@ -198,6 +198,8 @@ def import_month(
             skipped += 1
             continue
         day = (interval.get("start") or "")[:10]
+        # Pozor: `tag` tu drží ID štítku, kdežto demo data v něm mají název.
+        # Překlad ID na název by chtěl další dotaz na /tags; zatím nestojí za to.
         rows.append((
             e["id"], project_id, day, hours,
             e.get("description") or "", 1 if e.get("billable", True) else 0,

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 
 import pytest
 
@@ -158,9 +159,8 @@ def test_bad_arguments(demo_db):
 def test_database_is_read_only(demo_db):
     from timeagent import db as dbmod
 
-    with dbmod.connect_ro() as conn:
-        with pytest.raises(sqlite3.OperationalError):
-            conn.execute("DELETE FROM time_entries")
+    with closing(dbmod.connect_ro()) as conn, pytest.raises(sqlite3.OperationalError):
+        conn.execute("DELETE FROM time_entries")
 
 
 def test_every_schema_has_implementation():
@@ -199,3 +199,26 @@ def test_coerce_leaves_valid_arguments_alone(demo_db):
     assert tools.coerce_arguments(
         "capacity_check", {"month": "2026-08", "target_hours": 160.0}
     ) == {"month": "2026-08", "target_hours": 160.0}
+
+
+def test_month_is_normalised_in_output(demo_db):
+    """Výstup nekopíruje překlepy ze vstupu — `2026-8` vrátí `2026-08`."""
+    assert tools.compute_invoice("ACME", "2026-8")["month"] == "2026-08"
+    assert tools.capacity_check("2026-8")["month"] == "2026-08"
+    # a čísla sedí s kanonickým zápisem
+    assert tools.capacity_check("2026-8") == tools.capacity_check("2026-08")
+
+
+def test_wildcards_in_project_name_are_literal(demo_db):
+    """`%` ve vstupu je hledaný znak, ne zástupný symbol pro cokoli."""
+    out = tools.call_tool("compute_invoice", {"project": "%", "month": "2026-08"})
+    assert "neexistuje" in out["error"]
+
+    out = tools.call_tool("compute_invoice", {"project": "_", "month": "2026-08"})
+    assert "neexistuje" in out["error"]
+
+
+def test_project_lookup_still_matches_substrings(demo_db):
+    """Escapování nesmí rozbít běžné částečné hledání."""
+    assert tools.compute_invoice("acme", "2026-08")["project"] == "ACME"
+    assert tools.compute_invoice("Northwind", "2026-08")["project"] == "NWND"

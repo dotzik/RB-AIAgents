@@ -315,8 +315,8 @@ def test_textual_call_is_executed_and_fed_back(demo_db):
 def test_textual_call_rescue_is_limited(demo_db):
     """Model, který text posílá pořád, nesmí smyčku držet donekonečna."""
     stubborn = FakeLLM([
-        _response(content='{"name": "capacity_check", "arguments": {"month": "2026-0%d"}}'
-                          % (i + 1))
+        _response(content='{"name": "capacity_check", "arguments": '
+                          f'{{"month": "2026-0{i + 1}"}}}}')
         for i in range(6)
     ])
     result = ReactAgent(complete_fn=stubborn, trace=False).run("?")

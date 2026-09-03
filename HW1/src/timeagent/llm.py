@@ -1,6 +1,7 @@
 """Tenká vrstva nad LiteLLM — jediné místo, kde je vidět poskytovatel.
 
-Poskytovatel se přepíná v `.env` (`MODEL`, volitelně `API_BASE`), ne v kódu.
+Poskytovatel se přepíná v `.env` (`TIMEAGENT_MODEL`, volitelně
+`TIMEAGENT_API_BASE`), ne v kódu.
 Ollama, LM Studio, Anthropic i OpenAI mají každý jiný tvar tool-callingu;
 LiteLLM je sjednocuje na OpenAI formát, takže smyčka agenta je pro všechny
 jedna a tatáž.
@@ -95,7 +96,7 @@ def complete(
 
     try:
         return litellm.completion(**kwargs)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise LLMError(
             f"Volání modelu {kwargs['model']!r} selhalo: {exc}\n"
             "Zkontroluj MODEL a API_BASE v .env; u lokálních modelů, jestli "

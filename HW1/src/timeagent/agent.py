@@ -12,15 +12,18 @@ jednorázového volání API.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any, Callable
+from typing import Any
 
 from . import llm, tools
 
 MAX_ITERATIONS = 8
 # Kolikrát smíme za model spustit nástroj, který napsal jen jako text.
 MAX_TEXTUAL_RESCUES = 2
+# Po kolika po sobě jdoucích krocích bez nového výsledku vynutíme závěr.
+MAX_REPEATED_STEPS = 2
 
 SYSTEM_PROMPT = """\
 Jsi asistent pro analýzu výkazů odpracovaného času. Odpovídáš česky, stručně a věcně.
@@ -69,6 +72,12 @@ class Step:
 
 @dataclass
 class AgentResult:
+    """Výsledek jednoho dotazu: odpověď, průběh a spotřeba.
+
+    `messages` je celá konverzace včetně volání nástrojů — dá se předat
+    do dalšího `run()` jako `history` a navázat na ni.
+    """
+
     answer: str
     steps: list[Step] = field(default_factory=list)
     iterations: int = 0
@@ -153,7 +162,6 @@ class ReactAgent:
         self.trace = trace
         self._complete = complete_fn or llm.complete
         self.today = today
-        # Zapamatované výsledky, aby se stejné volání nespouštělo dvakrát.
         self._cache: dict[tuple[str, str], dict[str, Any]] = {}
 
     # -- výpis průběhu ----------------------------------------------------
@@ -207,10 +215,13 @@ class ReactAgent:
         v konverzaci už má; jen se mu odebere možnost sáhnout po dalším nástroji.
         """
         self._emit("  model se netrhne od nástrojů — vynucuji závěr bez nich")
-        nudge = messages + [{
-            "role": "user",
-            "content": "Shrň teď odpověď z podkladů výše. Další nástroje nevolej.",
-        }]
+        nudge = [
+            *messages,
+            {
+                "role": "user",
+                "content": "Shrň teď odpověď z podkladů výše. Další nástroje nevolej.",
+            },
+        ]
         try:
             response = self._complete(nudge, None, model=self.model)
         except Exception:  # noqa: BLE001 — vynucený závěr je bonus, ne povinnost
@@ -229,6 +240,9 @@ class ReactAgent:
             {"role": "system", "content": build_system_prompt(self.today)}
         ]
         messages.append({"role": "user", "content": question})
+
+        # Dedup je v rámci jedné otázky; nová otázka smí nástroje volat znovu.
+        self._cache.clear()
 
         result = AgentResult(answer="", model=self.model, messages=messages)
         repeated_only = 0
@@ -249,8 +263,6 @@ class ReactAgent:
             if not tool_calls:
                 textual = parse_textual_tool_call(content)
                 if textual and rescues < MAX_TEXTUAL_RESCUES:
-                    # Model napsal volání nástroje jako text. Spustíme ho za něj
-                    # a výsledek vrátíme do konverzace, ať turn nepřijde vniveč.
                     rescues += 1
                     name, arguments = textual
                     self._emit("  model napsal volání nástroje jako text — spouštím ho")
@@ -293,7 +305,6 @@ class ReactAgent:
                 ],
             })
 
-            # Zpracuj VŠECHNA volání v tomto kroku, ne jen první.
             fresh = 0
             for tc in tool_calls:
                 arguments = _arguments_to_dict(tc.function.arguments)
@@ -311,7 +322,7 @@ class ReactAgent:
             if fresh == 0:
                 # Celý krok byl jen opakování — model se točí, dál to nemá smysl.
                 repeated_only += 1
-                if repeated_only >= 2:
+                if repeated_only >= MAX_REPEATED_STEPS:
                     result.iterations = iteration
                     result.answer = self._force_answer(messages, result) or (
                         "[Model se zacyklil na opakovaném volání nástroje a nedospěl "
