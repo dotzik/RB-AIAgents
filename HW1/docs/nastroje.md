@@ -18,6 +18,11 @@ pak podle části názvu nebo jména klienta. `acme`, `ACME`, `Acme Corp`
 i `platforma` vedou na tentýž projekt. Když vzor odpovídá víc projektům, nástroj
 skončí chybou a vypíše kandidáty. Znaky `%` a `_` se berou doslova.
 
+**Výstupy jsou záměrně krátké.** Výsledek nástroje se posílá modelu v každém
+dalším kroku znovu, takže každý ušetřený řádek se počítá vícekrát. Proto
+`query_time_entries` vrací agregát a jen pár ukázkových záznamů místo celého
+výpisu.
+
 **Chyby se nevyhazují, ale vrací** jako `{"error": "..."}`. Model tak dostane
 zpětnou vazbu ve tvaru, se kterým umí pracovat, a může si opravit argumenty.
 
@@ -70,10 +75,10 @@ by zbytečně plnil kontext modelu.
 | `date_to` | string | **ano** | — | poslední den období |
 | `project` | string | ne | vše | omezení na jeden projekt |
 | `billable` | boolean | ne | vše | `true` jen fakturovatelné, `false` jen nefakturovatelné |
-| `limit` | integer | ne | `10` | počet záznamů ve vzorku, max 50 |
+| `limit` | integer | ne | `3` | počet ukázkových záznamů, max 20; součty neovlivňuje |
 
 ```python
-query_time_entries(date_from="2026-08-01", date_to="2026-08-31", project="Acme", limit=2)
+query_time_entries(date_from="2026-08-01", date_to="2026-08-31", project="Acme", limit=1)
 ```
 
 ```json
@@ -289,3 +294,33 @@ Ověření, že model nástroj vidí:
 ```bash
 uv run timeagent tools
 ```
+
+---
+
+# Popisy jsou rozhraní pro model
+
+Text v `description` není komentář — je to jediné, podle čeho se model rozhoduje,
+který nástroj zavolat a s jakými hodnotami. Zaslouží stejnou péči jako
+dokumentace pro lidi, a stejně jako u ní platí, že **holý výčet hodnot nestačí**.
+
+Konkrétní případ z měření: parametr `dimension` měl původně popis „Podle čeho
+seskupit" a enum `["project", "client", "day", "week", "month", "tag"]`. Na dotaz
+„jaká činnost mi zabrala nejvíc času" **selhaly všechny lokální modely** — sáhly
+po `project`, protože `tag` jim nic neříkalo. Nebyla to chyba modelů; z toho
+popisu by druh činnosti neuhodl ani člověk.
+
+Co se osvědčilo:
+
+- **Vysvětli hodnoty výčtu**, ne jen jejich názvy — `tag = druh činnosti (vývoj,
+  analýza, schůzka…)`.
+- **Napiš, kdy nástroj použít**, ne jen co dělá. `capacity_check` má v popisu
+  „nejrychlejší cesta k otázkám typu kolik hodin jsem odpracoval v měsíci".
+- **Napiš, co se vrací**, ať model neplánuje další volání pro něco, co už má.
+  `compute_invoice` uvádí, že vrací částku s DPH i bez ní.
+- **Odkloň od špatných cest.** `compute_invoice` výslovně říká „použij tenhle
+  nástroj, ne násobení hodin sazbou" — právě tuhle chybu modely dělaly.
+
+Ta péče něco stojí: schémata se posílají modelu **v každém kroku**, takže delší
+popisy zdražují každou iteraci. Aktuálně mají všechna schémata dohromady kolem
+960 tokenů. Vyplatí se to, pokud ušetří jedno chybné volání navíc — což u pěti
+nástrojů vychází, u padesáti už by bylo potřeba měřit.

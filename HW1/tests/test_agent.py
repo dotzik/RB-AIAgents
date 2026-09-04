@@ -326,3 +326,31 @@ def test_textual_call_rescue_is_limited(demo_db):
     assert len(result.steps) == MAX_TEXTUAL_RESCUES
     # po vyčerpání záchran se text vrátí tak, jak přišel
     assert result.answer.startswith("{")
+
+
+def test_parses_call_nested_under_response():
+    """Reálný tvar od qwen2.5:14b — volání zabalené v odpovědi s tool_calls."""
+    from timeagent.agent import parse_textual_tool_call
+
+    text = ('{"id": "call_65b6", "type": "response", "response": {"tool_calls": '
+            '[{"id": "call_65b6", "type": "function", "function": '
+            '{"name": "compute_invoice", "arguments": '
+            '{"project": "NWND", "month": "2026-08"}}}]}}')
+    assert parse_textual_tool_call(text) == (
+        "compute_invoice", {"project": "NWND", "month": "2026-08"},
+    )
+
+
+def test_parses_call_in_bare_tool_calls_list():
+    from timeagent.agent import parse_textual_tool_call
+
+    text = '{"tool_calls": [{"function": {"name": "list_projects", "arguments": {}}}]}'
+    assert parse_textual_tool_call(text) == ("list_projects", {})
+
+
+def test_nested_shapes_still_reject_plain_results():
+    """Rozbalování nesmí začít považovat výsledek nástroje za volání."""
+    from timeagent.agent import parse_textual_tool_call
+
+    assert parse_textual_tool_call('{"response": {"total_hours": 179.5}}') is None
+    assert parse_textual_tool_call('{"tool_calls": []}') is None

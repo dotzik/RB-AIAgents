@@ -115,18 +115,19 @@ def query_time_entries(
     date_to: str,
     project: str | None = None,
     billable: bool | None = None,
-    limit: int = 10,
+    limit: int = 3,
 ) -> dict[str, Any]:
     """Součet odpracovaných hodin za období, volitelně jen za jeden projekt.
 
-    Vrací agregát (hodiny, počet záznamů, počet dnů) a vzorek jednotlivých
-    záznamů — celý výpis by zbytečně plnil kontext modelu.
+    Vrací agregát (hodiny, počet záznamů, počet dnů) a malý vzorek záznamů.
+    Vzorek je záměrně krátký: výsledky nástrojů se posílají modelu v každém
+    dalším kroku znovu, takže každý ušetřený řádek se počítá vícekrát.
     """
     date_from = _parse_date(date_from, "date_from")
     date_to = _parse_date(date_to, "date_to")
     if date_from > date_to:
         raise ToolError("date_from je pozdější než date_to")
-    limit = max(0, min(int(limit), 50))
+    limit = max(0, min(int(limit), 20))
 
     with closing(db.connect_ro()) as conn:
         where = "WHERE e.date BETWEEN ? AND ?"
@@ -326,8 +327,9 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "list_projects",
             "description": (
-                "Vypíše projekty včetně klientů, hodinových sazeb a měny. "
-                "Zavolej jako první, když nevíš, jaké projekty existují."
+                "Vypíše projekty: identifikátor, název, jméno klienta, hodinovou "
+                "sazbu a měnu. Zavolej jako první, když neznáš přesný název "
+                "projektu nebo potřebuješ sazbu. Sazby jinde nezjistíš."
             ),
             "parameters": {
                 "type": "object",
@@ -346,8 +348,11 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "query_time_entries",
             "description": (
-                "Součet odpracovaných hodin za zadané období, volitelně jen za jeden "
-                "projekt. Vrací i vzorek jednotlivých záznamů."
+                "Součet odpracovaných hodin za libovolné období, volitelně jen za "
+                "jeden projekt. Vrací celkové hodiny, počet záznamů, počet "
+                "odpracovaných dnů a několik ukázkových záznamů. Použij na období, "
+                "která nejsou celý měsíc; na jeden měsíc je vhodnější "
+                "capacity_check, na rozpady summarize_by."
             ),
             "parameters": {
                 "type": "object",
@@ -357,11 +362,17 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "project": _PROJECT_PROP,
                     "billable": {
                         "type": "boolean",
-                        "description": "true = jen fakturovatelné, false = jen nefakturovatelné",
+                        "description": (
+                            "Fakturovatelnost: true = jen práce účtovaná klientovi, "
+                            "false = jen neúčtovaná (interní). Vynech pro obojí."
+                        ),
                     },
                     "limit": {
                         "type": "integer",
-                        "description": "Kolik záznamů ve vzorku (výchozí 10, max 50)",
+                        "description": (
+                            "Kolik ukázkových záznamů vrátit (výchozí 3, max 20). "
+                            "Součty se počítají ze všech záznamů, limit je neovlivní."
+                        ),
                     },
                 },
                 "required": ["date_from", "date_to"],
@@ -373,8 +384,10 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "summarize_by",
             "description": (
-                "Souhrn hodin seskupený podle zvolené dimenze. Použij pro rozpady "
-                "a porovnání (např. hodiny po projektech za měsíc)."
+                "Souhrn hodin seskupený podle zvolené dimenze, seřazený sestupně. "
+                "Vrací pro každou skupinu její název a odpracované hodiny. Použij "
+                "vždy, když se ptáš 'na čem/kdy nejvíc' nebo potřebuješ rozpad — "
+                "první skupina ve výsledku je ta s nejvíce hodinami."
             ),
             "parameters": {
                 "type": "object",
@@ -382,12 +395,24 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "dimension": {
                         "type": "string",
                         "enum": list(_DIMENSIONS),
-                        "description": "Podle čeho seskupit",
+                        "description": (
+                            "Podle čeho seskupit. "
+                            "project = zakázka, client = odběratel, "
+                            "tag = druh činnosti (vývoj, analýza, schůzka, "
+                            "code review, nasazení, podpora, dokumentace), "
+                            "day / week / month = časové období."
+                        ),
                     },
                     "date_from": _DATE_PROP,
                     "date_to": _DATE_PROP,
                     "project": _PROJECT_PROP,
-                    "billable": {"type": "boolean", "description": "Filtr fakturovatelnosti"},
+                    "billable": {
+                        "type": "boolean",
+                        "description": (
+                            "Fakturovatelnost: true = jen účtované klientovi, "
+                            "false = jen interní. Vynech pro obojí."
+                        ),
+                    },
                 },
                 "required": ["dimension", "date_from", "date_to"],
             },
@@ -398,8 +423,11 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "compute_invoice",
             "description": (
-                "Fakturační podklad za projekt a měsíc — fakturovatelné hodiny krát "
-                "sazba, základ, DPH a částka celkem."
+                "Fakturační podklad za jeden projekt a měsíc. Vrací fakturovatelné "
+                "hodiny, sazbu, částku bez DPH (amount_excl_vat), DPH a částku "
+                "celkem (amount_incl_vat). Nefakturovatelné hodiny ignoruje. "
+                "Když se ptáš 'kolik naúčtovat', použij tenhle nástroj, ne "
+                "násobení hodin sazbou."
             ),
             "parameters": {
                 "type": "object",
@@ -420,8 +448,11 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "capacity_check",
             "description": (
-                "Porovná odpracované hodiny za měsíc proti cíli — kolik chybí nebo "
-                "přebývá a na kolik procent je cíl naplněn."
+                "Přehled celého měsíce přes všechny projekty: odpracované hodiny "
+                "celkem, z toho fakturovatelné a nefakturovatelné, počet "
+                "odpracovaných dnů, rozdíl proti cíli a plnění v procentech. "
+                "Nejrychlejší cesta k otázkám typu 'kolik hodin jsem odpracoval "
+                "v měsíci'."
             ),
             "parameters": {
                 "type": "object",

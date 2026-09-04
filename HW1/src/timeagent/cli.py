@@ -117,12 +117,27 @@ def cmd_chat(args: argparse.Namespace) -> int:
 def cmd_bench(args: argparse.Namespace) -> int:
     from . import bench
 
+    if args.rescore:
+        with open(args.rescore, encoding="utf-8") as f:
+            rows = json.load(f)
+        outcomes = bench.rescore(rows)
+        if not outcomes:
+            print("Soubor neobsahuje žádný známý případ.", file=sys.stderr)
+            return 1
+        print(bench.to_markdown(outcomes))
+        return 0
+
+    if not args.models:
+        print("Zadej --models nebo --rescore.", file=sys.stderr)
+        return 1
+
     models = [m.strip() for m in args.models.split(",") if m.strip()]
     outcomes = bench.run(
         models,
         api_base=args.api_base,
         max_iterations=args.max_iterations,
         trace=args.trace,
+        repeat=args.repeat,
     )
     print()
     print(bench.to_markdown(outcomes))
@@ -186,10 +201,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_chat.set_defaults(func=cmd_chat)
 
     p_bench = sub.add_parser("bench", help="srovnat modely na stejné sadě dotazů")
-    p_bench.add_argument("--models", required=True,
-                         help="seznam modelů oddělený čárkou")
+    p_bench.add_argument("--models", help="seznam modelů oddělený čárkou")
+    p_bench.add_argument("--rescore", metavar="SOUBOR",
+                         help="obodovat znovu odpovědi z dřívějšího --json běhu")
     p_bench.add_argument("--api-base", help="endpoint pro všechny modely v běhu")
     p_bench.add_argument("--max-iterations", type=int, default=agent_mod.MAX_ITERATIONS)
+    p_bench.add_argument("--repeat", type=int, default=1,
+                         help="kolikrát pustit každý dotaz (1)")
     p_bench.add_argument("--trace", action="store_true", help="vypisovat i kroky")
     p_bench.add_argument("--json", action="store_true", help="přidat surová data")
     p_bench.set_defaults(func=cmd_bench)

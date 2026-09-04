@@ -9,35 +9,51 @@ Naměřeno 3.–4. září 2026.
 ## Metodika
 
 ```bash
-uv run timeagent bench --models ollama/qwen2.5:14b,ollama/qwen2.5:32b \
-                       --api-base http://192.168.0.24:11434 --json
+uv run timeagent bench --models ollama/qwen2.5:14b,ollama/qwen2.5:32b                        --api-base http://192.168.0.24:11434 --repeat 3 --json
 ```
 
-Tři dotazy stoupající obtížnosti, pro všechny modely shodné:
+**Třináct dotazů** stoupající obtížnosti, pro všechny modely shodné. Každý se
+pouští **třikrát**, protože modely blízko hranice použitelnosti mezi běhy kolísají
+a jediné měření by o nich lhalo.
 
-| Případ | Dotaz | Co ověřuje |
-|---|---|---|
-| `faktura` | „Kolik jsem v 2026-08 nafakturoval klientovi Acme?" | jedno volání nástroje, přímá odpověď |
-| `kapacita` | „Kolik hodin jsem odpracoval v 2026-08 a chybělo mi něco do 160 hodin?" | jedno volání, dvě čísla v jedné větě |
-| `porovnani` | „Porovnej 2026-07 a 2026-08 podle projektů." | dvě volání a udržet, které číslo patří ke kterému měsíci |
+| Případ | Co ověřuje |
+|---|---|
+| `faktura` | jedno volání, přímá odpověď |
+| `faktura_dph` | správná z dvojice částek — pozná model rozdíl základu a celkem? |
+| `kapacita` | jedno volání, jedno číslo |
+| `nefakturovatelne` | méně obvyklé pole ve výsledku nástroje |
+| `pocet_projektu` | volitelný parametr (`active_only`) |
+| `sazba` | dohledání údaje v seznamu |
+| `klient_nejvic` | seskupení; odpověď musí obsahovat jméno i číslo |
+| `tag_nejvic` | seskupení podle druhu činnosti |
+| `nejvytizenejsi_den` | seskupení podle dne; datum smí být i v běžném českém tvaru |
+| `ctvrtleti` | období přes tři měsíce |
+| `porovnani` | dvě volání a udržet, které číslo patří ke kterému měsíci |
+| `ukonceny_projekt` | průzkum — žádný nástroj neodpoví přímo |
+| `retezeni` | dvě volání, druhé závisí na výsledku prvního |
 
-**Vyhodnocení.** Kontroluje se, jestli v konečné odpovědi zazněla správná čísla —
+**Vyhodnocení.** Kontroluje se, jestli v konečné odpovědi zazněly správné údaje —
 ne jestli proběhl nástroj. Agent, který si vytáhne správná data a pak je špatně
 přepíše, je k ničemu stejně jako ten, co je vůbec nenajde.
 
 Očekávané hodnoty se čtou **z databáze při každém běhu**, ne ze zapsaných
-konstant, takže měření nezestárne s přegenerovanými daty. Kontrola je tolerantní
-k formátování (`93 000`, `93000.00`, `93000 Kč`) a připouští rovnocenné varianty:
-u faktury projde částka s DPH i bez ní, u porovnání stačí hodiny libovolného
-projektu z každého měsíce.
+konstant, takže měření nezestárne s přegenerovanými daty. Kontrola je záměrně
+tolerantní k tomu, co na správnosti nic nemění:
+
+- formátování čísel — `93 000`, `93000.00`, `93000 Kč`
+- diakritika — v databázi je tag `vyvoj`, model napíše „vývoj"
+- zápis data — `2026-08-28` i „28. srpna 2026"
+- rovnocenné varianty — u faktury projde částka s DPH i bez ní
+
+Naopak **netoleruje** vynechání toho, na co se otázka ptá: u seskupení musí zaznít
+jméno skupiny i hodnota. Jak se hledala hranice mezi „tolerantní" a „děravá",
+popisuje [oddíl o chybách v benchmarku](#chyby-v-benchmarku-a-co-z-nich-plyne).
 
 **Data.** `timeagent seed` s výchozím seedem, měsíc `2026-08`
-(`TIMEAGENT_BENCH_MONTH`). Srpen má v datech 179,5 hodiny, z toho 166 fakturovatelných;
-ACME 62 hodin, tedy 93 000 Kč bez DPH.
+(`TIMEAGENT_BENCH_MONTH`).
 
-**Rozsah.** Tři dotazy, jeden běh na model. To je tenký důkaz — tabulka říká, co
-který model zvládl tady a teď, ne co zvládne obecně. Rozšířit sadu znamená přidat
-záznam do `cases()` v [`bench.py`](../src/timeagent/bench.py).
+**Rozsah.** 13 dotazů × 3 běhy = 39 měření na model. Výjimkou je CPU, kde jeden
+průchod trvá hodiny — tam proběhl jen jeden běh a čísla jsou proto orientační.
 
 ## Výsledky
 
@@ -101,15 +117,15 @@ Jak jednotlivé pojistky fungují, popisuje [architektura.md](architektura.md).
 
 ## Chyby v benchmarku a co z nich plyne
 
-První kolo měření vypadalo drtivě: *porovnání dvou měsíců* neprošlo **žádnému**
-modelu, od 3B až po Opus. Takový výsledek je podezřelý sám o sobě — a taky byl.
-Chyba byla dvakrát na straně měření, ne modelů.
+Během měření se ukázalo pět vad — a **čtyři z nich byly v měření, ne v modelech**.
+Stojí za to je vypsat, protože mají společný vzorec a dají se jím předcházet.
 
 ### Useknutý měsíc
 
 Očekávané hodnoty se počítaly za období `YYYY-MM-01` až `YYYY-MM-28`. Modely
 správně hlásily celý měsíc, scorer je porovnával s useknutým obdobím a označoval
-za chybné. Po opravě dává Haiku 4.5 plný počet.
+za chybné. Projevilo se to tím, že *porovnání dvou měsíců* neprošlo **žádnému**
+modelu, od 3B až po Opus — což je samo o sobě podezřelý výsledek.
 
 ### Dvojznačné zadání
 
@@ -127,18 +143,96 @@ spočítaly a dostaly ✅.
 **Model, který si všiml vady v zadání, byl potrestán víc než modely, které ji
 ignorovaly.** Špatně navržená metrika si tenhle druh poctivosti systematicky
 vypěstuje pryč — a protože se hodnotí podle metriky, nikdo si toho nemusí
-všimnout. Poučení není o Sonnetu, ale o tom, že metrika potřebuje revizi stejně
-jako kód, který měří.
+všimnout.
 
-Obě chyby hlídají regresní testy `test_compare_covers_whole_month_not_first_28_days`
-a `test_comparison_question_names_both_months`.
+### Příliš přísné vyhodnocení, dvakrát
 
-### Příliš přísné vyhodnocení
+U faktury se vyžadovalo, aby v odpovědi zazněly hodiny *i* částka. Otázka se ale
+ptá jen na částku, takže odpověď „112 530 Kč" byla věcně správná a přesto padala.
 
-Třetí, mírnější případ: u faktury se původně vyžadovalo, aby v odpovědi zazněly
-hodiny *i* částka. Otázka se ale ptá jen na částku, takže odpověď „112 530 Kč"
-byla věcně správná a přesto padala. Vyhodnocení dnes připouští rovnocenné
-varianty.
+Totéž u dotazu „který den jsem odpracoval nejvíc hodin" — vyžadoval jsem datum
+i počet hodin, přestože otázka chce jen ten den.
+
+### Kontrola měřila databázový zápis, ne odpověď
+
+Nejzajímavější případ. Očekávané hodnoty se braly z databáze tak, jak tam jsou:
+
+| Očekávalo se | Model odpověděl | Kdo měl pravdu |
+|---|---|---|
+| `vyvoj` | „vývoj" | model |
+| `2026-08-28` | „28. srpna 2026" | model |
+
+Tagy jsou v databázi bez diakritiky, protože jsou to identifikátory. Datum je
+v ISO tvaru, protože se s ním tak pracuje. Ale **model neodpovídá databázovým
+zápisem, odpovídá česky** — a měřit se má odpověď, ne interní reprezentace.
+
+### Společný vzorec a jak mu předcházet
+
+Všech pět má stejnou příčinu: **očekávaná odpověď se odvozovala z datové cesty,
+ne z toho, jak vypadá správná odpověď pro člověka.**
+
+Z toho plyne pět praktik, které jsou dnes v projektu zabudované:
+
+**1. Vzorovou odpověď napiš dřív než kontrolu.** Každý případ v
+[`bench.py`](../src/timeagent/bench.py) nese ručně napsanou správnou odpověď
+(`sample`) a věrohodně vypadající špatnou (`counter_sample`). Test
+`test_kazdy_pripad_ma_konzistentni_vzory` ověří, že kontrola první přijme
+a druhou odmítne. Kdyby očekávaná hodnota byla `vyvoj`, vzorová odpověď „vývoj"
+neprojde a je to vidět hned — ne až v tabulce, kde to vypadá jako chyba modelu.
+
+Ta pojistka zabrala hned při psaní: vzorovou odpověď jsem měl s tagem natvrdo
+a v testovací databázi vede jiná činnost.
+
+**2. Selhání referenčního modelu ber jako podezření na metriku.** Když nejsilnější
+dostupný model spadne na dotazu, který zjevně umí, je pravděpodobnější, že měříš
+špatně. Dvě z pěti vad se našly takhle.
+
+**3. Negativní kontrola ke každé kontrole.** Bez ověření, že metrika **odmítne**
+špatnou odpověď, můžeš mít metriku propouštějící cokoli — a to je horší než
+přísná, protože si toho nikdo nevšimne.
+
+**4. Odděl, co čím testuješ.** U nástrojů je správné odvozovat očekávanou hodnotu
+ze SQL — testuje se nástroj proti databázi. U benchmarku ne — tam se testuje
+odpověď pro člověka. Splácnutí obojího dohromady je zdroj téhle chyby.
+
+**5. Uchovávej odpovědi a umožni přehodnocení.** `--json` ukládá celé odpovědi,
+`--rescore` je oboduje znovu aktuální kontrolou:
+
+```bash
+uv run timeagent bench --models ... --json > vysledky.json
+uv run timeagent bench --rescore vysledky.json
+```
+
+Oprava metriky pak stojí vteřiny místo hodin. Konkrétně: uvolnění kontroly
+u dotazu na den posunulo `qwen3-4b` z 27/39 na 30/39 **bez jediného nového volání
+modelu**. Než tahle možnost existovala, každá oprava vyhodnocení znamenala pustit
+celé měření znovu — za jeden den čtyřikrát.
+
+Obě první vady navíc hlídají regresní testy
+(`test_compare_covers_whole_month_not_first_28_days`,
+`test_comparison_question_names_both_months`).
+
+### A jedna vada, která nebyla ani v modelu, ani v metrice
+
+`tag_nejvic` selhal 0/3 u **všech** lokálních modelů. Když stejný případ padá
+napříč modely, je podezřelý případ. Příčina byla ve schématu nástroje:
+
+```json
+"dimension": {
+  "enum": ["project", "client", "day", "week", "month", "tag"],
+  "description": "Podle čeho seskupit"
+}
+```
+
+Model nemá jak vědět, co `tag` obsahuje. Že jsou v něm druhy činnosti, neplyne
+ani z názvu, ani z popisu — modely proto sáhly po `project`, jediné dimenzi,
+které z toho výčtu rozumí. Není to chyba modelu; **je to vada dokumentace
+nástroje**, kterou by stejně tak neuhodl člověk.
+
+Popis dnes vyjmenovává, co která dimenze znamená. Poučení: **popisy v JSON
+schématu jsou rozhraní pro model a patří jim stejná péče jako dokumentaci pro
+lidi.** Enum s holými hodnotami je pro model asi tak užitečný jako pro nového
+kolegu.
 
 ## Hardware
 

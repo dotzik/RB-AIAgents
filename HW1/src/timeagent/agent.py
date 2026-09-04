@@ -108,6 +108,33 @@ def _arguments_to_str(raw: Any) -> str:
     return raw if isinstance(raw, str) else json.dumps(raw or {}, ensure_ascii=False)
 
 
+def _candidate_bodies(payload: Any) -> list[dict[str, Any]]:
+    """Místa, kde v podvrženém JSON může být popis volání nástroje.
+
+    Modely to balí různě: `{"name": ...}`, `{"function": {...}}` nebo celý
+    `{"response": {"tool_calls": [{"function": {...}}]}}`. Rozbalíme všechny
+    tvary, které jsme v praxi viděli, a necháme rozhodnout jméno nástroje.
+    """
+    if not isinstance(payload, dict):
+        return []
+
+    bodies: list[dict[str, Any]] = [payload]
+    if isinstance(payload.get("function"), dict):
+        bodies.append(payload["function"])
+
+    for klic in ("response", "message"):
+        vnorene = payload.get(klic)
+        if isinstance(vnorene, dict):
+            bodies.extend(_candidate_bodies(vnorene))
+
+    volani = payload.get("tool_calls")
+    if isinstance(volani, list):
+        for polozka in volani:
+            bodies.extend(_candidate_bodies(polozka))
+
+    return bodies
+
+
 def parse_textual_tool_call(content: str | None) -> tuple[str, dict[str, Any]] | None:
     """Rozpozná volání nástroje, které model napsal jako text.
 
@@ -116,8 +143,8 @@ def parse_textual_tool_call(content: str | None) -> tuple[str, dict[str, Any]] |
     vrátil uživateli jako výsledek. Tady se z něj vytáhne jméno a argumenty,
     aby smyčka mohla pokračovat.
 
-    Rozpozná dva tvary: OpenAI (`{"function": {"name": ..., "arguments": ...}}`)
-    a plochý (`{"name": ..., "arguments"/"parameters": {...}}`).
+    Za volání se považuje jen JSON, jehož `name` odpovídá skutečnému nástroji —
+    běžná odpověď ani výsledek nástroje tou podmínkou neprojdou.
     """
     if not content:
         return None
@@ -129,20 +156,20 @@ def parse_textual_tool_call(content: str | None) -> tuple[str, dict[str, Any]] |
         payload = json.loads(text[start : end + 1])
     except (TypeError, ValueError):
         return None
-    if not isinstance(payload, dict):
-        return None
 
-    body = payload.get("function") if isinstance(payload.get("function"), dict) else payload
-    name = body.get("name")
-    if not isinstance(name, str) or name not in tools.REGISTRY:
-        return None
-    arguments = body.get("arguments", body.get("parameters", {}))
-    if isinstance(arguments, str):
-        try:
-            arguments = json.loads(arguments)
-        except (TypeError, ValueError):
-            return None
-    return (name, arguments) if isinstance(arguments, dict) else None
+    for body in _candidate_bodies(payload):
+        name = body.get("name")
+        if not isinstance(name, str) or name not in tools.REGISTRY:
+            continue
+        arguments = body.get("arguments", body.get("parameters", {}))
+        if isinstance(arguments, str):
+            try:
+                arguments = json.loads(arguments)
+            except (TypeError, ValueError):
+                continue
+        if isinstance(arguments, dict):
+            return name, arguments
+    return None
 
 
 class ReactAgent:
