@@ -9,7 +9,7 @@ Naměřeno 3.–4. září 2026.
 ## Metodika
 
 ```bash
-uv run timeagent bench --models ollama/qwen2.5:14b,ollama/qwen2.5:32b                        --api-base http://192.168.0.24:11434 --repeat 3 --json
+uv run timeagent bench --models ollama_chat/qwen2.5:14b,ollama_chat/qwen2.5:32b                        --api-base http://192.168.0.24:11434 --repeat 3 --json
 ```
 
 **Třináct dotazů** stoupající obtížnosti, pro všechny modely shodné. Každý se
@@ -53,45 +53,94 @@ popisuje [oddíl o chybách v benchmarku](#chyby-v-benchmarku-a-co-z-nich-plyne)
 (`TIMEAGENT_BENCH_MONTH`).
 
 **Rozsah.** 13 dotazů × 3 běhy = 39 měření na model. Výjimkou je CPU, kde jeden
-průchod trvá hodiny — tam proběhl jen jeden běh a čísla jsou proto orientační.
+průchod trvá hodiny — tam proběhl jen jeden běh.
+
+> **Výhrada k řádkům za CPU.** Vznikly za dvou nepříznivých okolností a jejich
+> čísla proto podhodnocují, co ty modely umí:
+>
+> 1. **Kontext 4096 tokenů.** Lokální Ollama běžela s výchozím nastavením,
+>    zatímco jeden dotaz potřebuje 5–21 tisíc tokenů. Konverzace se ořezávala
+>    a model přicházel o výsledky nástrojů, které si sám vyžádal. Není to mez
+>    modelu, ale konfigurace — dá se změnit parametrem `num_ctx`.
+> 2. **Starší popisy nástrojů.** Běh odstartoval dřív, než se opravil popis
+>    parametru `dimension` (viz [níže](#a-jedna-vada-která-nebyla-ani-v-modelu-ani-v-metrice)).
+>
+> Přeměření za srovnatelných podmínek je odložené kvůli času: samotné CPU
+> zabere přes čtyři hodiny.
 
 ## Výsledky
 
-| Backend | Model | faktura | kapacita | porovnání | čas | tokeny |
-|---|---|---|---|---|---|---|
-| Anthropic API | `claude-haiku-4-5` | ✅ | ✅ | ✅ | **18 s** | 15 222 |
-| Anthropic API | `claude-sonnet-5` | ✅ | ✅ | ✅ | 19 s | 16 905 |
-| Anthropic API | `claude-opus-5` | ✅ | ✅ | ✅ | 21 s | 16 379 |
-| DGX Spark (GB10) | `qwen2.5:14b` | ✅ | ✅ | ✅ | 46 s | 23 482 |
-| DGX Spark (GB10) | `qwen2.5:32b` | ✅ | ✅ | ✅ | 72 s | **14 310** |
-| Arc 140T (LM Studio) | `qwen3-4b-2507` | ✅ | ✅ | ✅ | 165 s | 17 157 |
-| CPU (Core Ultra 7 255H) | `qwen2.5:7b` | ✅ | ❌ | ✅ | 689 s | 27 312 |
-| CPU (Core Ultra 7 255H) | `llama3.2:3b` | ❌ | ❌ | ❌ | 321 s | 21 267 |
+Tabulka je rozdělená podle toho, za jakých podmínek řádky vznikly — smíchat je
+bez rozlišení by bylo zavádějící, protože opravy popsané níže výsledky prokazatelně
+posouvají.
+
+### Lokální modely na DGX Sparku
+
+Všechny čtyři za shodných podmínek, na finální verzi kódu:
+
+| Model | Skóre | Čas | Tokeny | Padá na |
+|---|---|---|---|---|
+| **`qwen2.5:14b`** | **39/39 (100 %)** | **222 s** | 163 089 | — |
+| `qwen2.5:32b` | 37/39 (95 %) | 767 s | 176 902 | `ukonceny_projekt` |
+| `qwen3:14b` | 37/39 (95 %) | 1 863 s | 208 888 | `ukonceny_projekt`, `retezeni` |
+| `gpt-oss:20b` | 32/39 (82 %) | 400 s | 176 316 | `nejvytizenejsi_den`, `klient_nejvic`, `ukonceny_projekt` |
+
+### Anthropic API
+
+| Model | Skóre | Čas | Tokeny |
+|---|---|---|---|
+| `claude-haiku-4-5` | 39/39 (100 %) | **135 s** | 215 898 |
+| `claude-sonnet-5` | 39/39 (100 %) | 217 s | 225 761 |
+| `claude-opus-5` | 39/39 (100 %) | 292 s | 243 292 |
+
+Měřeno před opravou popisů nástrojů. Protože všechny tři daly plný počet, oprava
+jim neměla co zlepšit; přeměření by výsledek změnit nemohlo.
+
+### Slabší hardware
+
+| Backend | Model | Skóre | Čas | Poznámka |
+|---|---|---|---|---|
+| Arc 140T (LM Studio) | `qwen3-4b-2507` | 30/39 (77 %) | 865 s | před opravou popisů nástrojů |
+| CPU (Core Ultra 7 255H) | `qwen2.5:7b` | 9/13 (69 %) | 3 060 s | jeden běh, kontext 4096 |
+| CPU (Core Ultra 7 255H) | `llama3.2:3b` | 2/13 (15 %) | 1 472 s | jeden běh, kontext 4096 |
+
+Řádky za CPU vznikly za nepříznivých podmínek popsaných v [metodice](#metodika)
+a podhodnocují, co ty modely umí.
 
 ### Co z toho plyne
 
-**Hranice použitelnosti leží kolem 4 miliard parametrů a je to zlom, ne svah.**
-Od `qwen3-4b` výš prošlo všechno; `llama3.2:3b` nedal ani jeden dotaz. Mezi tím
-není plynulý přechod.
+**Vyhrál nejmenší a nejstarší model.** `qwen2.5:14b` dal plný počet, je třikrát
+rychlejší než dvakrát větší `32b` a osmkrát rychlejší než stejně velký `qwen3:14b`.
+Ani větší velikost, ani novější generace nepomohly — v obou případech to dopadlo
+hůř. Rozhoduje, jak je model natrénovaný na tool calling, ne kolik má parametrů
+a z jakého je roku.
 
-**Nad tou hranicí velikost skoro nerozhoduje.** 4B, 14B, 32B i Opus dávají shodně
-3/3. Liší se rychlostí a spotřebou, ne správností. Rozhoduje spíš to, jak pečlivě
-je model natrénovaný na tool calling, než kolik má parametrů.
+**Reasoning se tady nevyplácí.** `qwen3:14b` stráví „přemýšlením" před odpovědí
+tolik času, že je proti stejně velkému `qwen2.5:14b` osmkrát pomalejší — a skončí
+o dva body níž. Na úloze, kde jsou fakta v databázi a stačí je správně vytáhnout,
+nemá o čem přemýšlet.
 
-**Tokeny prozrazují víc než skóre.** `qwen2.5:32b` došel k cíli na 14 310 tokenů,
-`14b` potřeboval 23 482 — víc kroků, víc oprav, menší rezerva. Obojí je ✅, ale ne
-stejně pohodlně. U modelu, který má zvládat i otázky mimo tuhle trojici, je ta
-rezerva to podstatné.
+**Cloud a dobře nastavený lokální model jsou na téhle úloze nerozeznatelné.**
+`qwen2.5:14b` na Sparku i Haiku 4.5 přes API dávají 39/39. Zbývá rozdíl v latenci
+(222 s proti 135 s) a v tom, že u lokálního modelu data neopustí síť.
 
-**Rychlost je věc hardwaru, správnost věc modelu.** Tentýž agent: 18 s přes API,
-46 s na Sparku, 165 s na integrované grafice, 689 s na CPU — a Spark má přitom
-stejné skóre jako 4B model na iGPU.
+**Nejtěžší dotaz je ten, na který neodpovídá žádný nástroj.** `ukonceny_projekt`
+(„na kterém projektu jsem přestal pracovat") selhal u tří modelů ze čtyř. Model
+musí sám vymyslet, že se má podívat na několik období a porovnat je — žádný nástroj
+tuhle otázku nezodpoví přímo. To je skutečný strop plánování, ne vada měření.
 
-**Malé modely kolísají.** `llama3.2:3b` dal v jednom kole 1/3, v druhém 0/3. Jedno
-měření u modelu na hraně nestačí.
+**Skóre se dá zlepšit i bez výměny modelu.** Tentýž `qwen2.5:14b` prošel během
+jednoho dne třemi hodnotami, aniž by se model změnil:
 
-**Časy na CPU jsou horní odhad.** Měřeno, když byl v paměti současně model
-v LM Studiu. Pořadí se tím nemění, absolutní čísla ano.
+| Skóre | Co se mezitím změnilo |
+|---|---|
+| 33/39 | výchozí stav |
+| 36/39 | lepší popisy nástrojů, kratší výstupy |
+| **39/39** | prefix `ollama_chat/` místo `ollama/` |
+
+Zlepšovalo se výhradně okolí modelu. To je pro stavbu agenta hlavní poznatek
+celého měření: **než sáhneš po větším modelu, projdi si popisy nástrojů, velikost
+výstupů a to, jak se model vůbec volá.**
 
 ## Pozorované způsoby selhání
 
@@ -106,12 +155,17 @@ zakopnou až při formulaci odpovědi.
 | Syrový JSON místo věty — `{"total_hours": 179.5, "difference": 19.5}` | `qwen2.5:7b`, `14b` | žádná, pokyn v systémovém promptu |
 | Volání nástroje napsané jako text | `qwen2.5:14b` i `32b` | rozpozná se a spustí za model |
 | `"true"` a `"null"` jako řetězce | `llama3.2:3b` | narovnání podle typu ve schématu |
+| Seskupení podle projektu místo podle druhu činnosti | všechny lokální | opraveno popisem parametru |
+| Odpověď bez hodnoty, jen s názvem skupiny | `gpt-oss:20b`, `qwen2.5:32b` | žádná, projeví se jako neúplná odpověď |
 
-Poslední dvě položky za zmínku stojí zvlášť. **Před přidáním pojistky proti
-textovému volání nedal 3/3 ani jeden lokální model**; po jejím přidání ji dávají
-všechny nad hranicí použitelnosti. Nezlepšily se modely, zlepšil se agent —
+Pojistka proti textovému volání za zmínku stojí zvlášť: **než vznikla, nedal
+plný počet ani jeden lokální model.** Nezlepšily se modely, zlepšil se agent —
 rozdíl mezi „lokální model na tohle nestačí" a „zvládne to" nebyl v modelu, ale
 v tom, jestli smyčka ustojí porušení protokolu.
+
+Jediné selhání, které se opravit nepodařilo, je `ukonceny_projekt`: otázka, na
+kterou žádný nástroj neodpovídá přímo a model musí sám vymyslet postup. Padá
+u tří modelů ze čtyř a je to skutečný strop plánování.
 
 Jak jednotlivé pojistky fungují, popisuje [architektura.md](architektura.md).
 
@@ -212,6 +266,28 @@ Obě první vady navíc hlídají regresní testy
 (`test_compare_covers_whole_month_not_first_28_days`,
 `test_comparison_question_names_both_months`).
 
+### Tiché selhání překladu mezi LiteLLM a Ollamou
+
+Do měření se přidaly dva novější lokální modely, `qwen3:14b` a `gpt-oss:20b`.
+Oba dopadly **0 z 39** — a při 0,7 sekundy na dotaz, což je samo o sobě
+nemožné. Odpověď byla prázdná: žádná výjimka, žádné volání nástroje, jen `{}`
+nebo prázdný řetězec.
+
+Kontrola přes nativní API Ollamy ukázala, že modely jsou v pořádku:
+
+```json
+"tool_calls": [{"function": {"name": "list_projects", "arguments": {"active_only": true}}}]
+```
+
+Příčina byla v prefixu. LiteLLM má pro Ollamu dva providery — `ollama/` používá
+starší cestu, `ollama_chat/` volá `/api/chat`. Se starším prefixem novější
+modely vrací prázdno **bez jakéhokoli varování**. `qwen2.5` fungoval i s ním,
+takže se ta vada projevila až s přidáním nových modelů.
+
+Poučení je stejné jako u ostatních vad, jen o patro níž: **nula napříč všemi
+případy není výsledek, ale symptom.** Model, který v jedné sadě selže úplně
+všude a přitom odpovídá v řádu desetin sekundy, nedostal šanci odpovědět.
+
 ### A jedna vada, která nebyla ani v modelu, ani v metrice
 
 `tag_nejvic` selhal 0/3 u **všech** lokálních modelů. Když stejný případ padá
@@ -265,11 +341,23 @@ Lokální běhy stojí jen čas.
 
 ## Závěr pro tenhle projekt
 
-Pro agenta nad výkazy je **`qwen2.5:14b` dostatečný** — dá 3/3 a běží lokálně,
-takže se s reálnými výkazy nemusí nic posílat ven. To je u dat s jmény klientů
-argument, který cenu ani rychlost nepřebijí.
+**`qwen2.5:14b` na Sparku je nejlepší volba** — 39/39, tedy stejně jako
+nejsilnější cloudové modely, a přitom data neopustí síť. To je u výkazů se jmény
+klientů argument, který cenu ani latenci nepřebijí.
 
-Kdo má Spark k dispozici stejně, `32b` nabízí větší rezervu za cenu vyšší latence.
-Pro rychlou odezvu bez ohledu na to, kde data jsou, je nejlevnější cloudová
-varianta (Haiku 4.5) zároveň nejrychlejší — mezi ní a Opusem není v téhle úloze
-rozdíl ve výsledku, jen v ceně.
+Zbylé varianty a kdy dávají smysl:
+
+| Varianta | Kdy |
+|---|---|
+| `qwen2.5:14b` (Spark) | výchozí volba — plný počet, lokálně, 222 s |
+| Haiku 4.5 (API) | když nevadí posílat data ven a záleží na odezvě (135 s) |
+| `qwen3-4b` (Arc) | když Spark není po ruce; na notebooku to jde, jen pomaleji |
+| CPU | jen na vyzkoušení; jeden dotaz trvá minuty |
+
+Co se **nevyplatilo**: sáhnout po větším modelu (`32b` je pomalejší a horší),
+sáhnout po novějším (`qwen3:14b` totéž), ani sáhnout po dražším cloudovém modelu
+(Opus se od Haiku neliší ničím než cenou a latencí).
+
+Co se **vyplatilo**: opravit popisy nástrojů, zkrátit jejich výstupy a volat model
+správnou cestou. Tytéž tři změny posunuly `qwen2.5:14b` z 33/39 na 39/39 — víc,
+než by přinesla jakákoli výměna modelu.

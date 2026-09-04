@@ -8,16 +8,17 @@ Model se zadává jako `poskytovatel/název`. Prefix určuje, jak se volání p�
 
 | Backend | `TIMEAGENT_MODEL` | `TIMEAGENT_API_BASE` | Klíč |
 |---|---|---|---|
-| Ollama lokálně | `ollama/qwen2.5:14b` | `http://localhost:11434` | — |
-| Ollama na jiném stroji | `ollama/qwen2.5:32b` | `http://192.168.0.24:11434` | — |
+| Ollama lokálně | `ollama_chat/qwen2.5:14b` | `http://localhost:11434` | — |
+| Ollama na jiném stroji | `ollama_chat/qwen3:14b` | `http://192.168.0.24:11434` | — |
 | LM Studio | `openai/qwen/qwen3-4b-2507` | `http://localhost:1234/v1` | libovolná hodnota |
 | Anthropic | `anthropic/claude-haiku-4-5` | *nenastavovat* | `ANTHROPIC_API_KEY` |
 | OpenAI | `gpt-4o-mini` | *nenastavovat* | `OPENAI_API_KEY` |
 | OpenRouter | `openrouter/meta-llama/llama-3.3-70b-instruct` | *nenastavovat* | `OPENROUTER_API_KEY` |
 
 Který model na tuhle úlohu stačí, ukazuje [mereni.md](mereni.md). Stručně:
-**pod 4 miliardy parametrů to nemá smysl zkoušet**, nad tou hranicí uspěly
-všechny testované modely.
+**`qwen2.5:14b` dal plný počet**, stejně jako nejsilnější cloudové modely.
+Větší ani novější modely si nevedly líp; pod zhruba 4 miliardy parametrů to
+naopak nemá smysl zkoušet.
 
 ---
 
@@ -32,9 +33,16 @@ ollama list                  # ověření
 ```
 
 ```bash
-TIMEAGENT_MODEL=ollama/qwen2.5:14b
+TIMEAGENT_MODEL=ollama_chat/qwen2.5:14b
 TIMEAGENT_API_BASE=http://localhost:11434
 ```
+
+> **Používej prefix `ollama_chat/`, ne `ollama/`.** LiteLLM má pro Ollamu dva
+> providery a liší se cestou, po které volají. Starší `ollama/` u novějších
+> modelů (`qwen3`, `gpt-oss`) **tiše vrátí prázdnou odpověď** — žádná výjimka,
+> žádné volání nástroje, jen prázdný obsah. V benchmarku se to projevilo jako
+> 0 ze 39 u obou modelů, přestože přes nativní API Ollamy volají nástroje
+> správně. Podrobněji v [mereni.md](mereni.md).
 
 Model musí umět tool calling. U Ollamy to pozná podle značky `tools` v katalogu;
 `qwen2.5`, `llama3.1` a `llama3.2` ho mají, ale menší varianty ho zvládají
@@ -68,7 +76,7 @@ ollama pull qwen2.5:32b
 Na klientovi:
 
 ```bash
-TIMEAGENT_MODEL=ollama/qwen2.5:32b
+TIMEAGENT_MODEL=ollama_chat/qwen2.5:32b
 TIMEAGENT_API_BASE=http://192.168.0.24:11434
 ```
 
@@ -223,7 +231,8 @@ Když měříš, nech načtený jen ten, který zrovna testuješ.
 
 | Příznak | Příčina |
 |---|---|
-| `LLM Provider NOT provided` | chybí prefix v `TIMEAGENT_MODEL` (`qwen2.5:14b` místo `ollama/qwen2.5:14b`) |
+| `LLM Provider NOT provided` | chybí prefix v `TIMEAGENT_MODEL` (`qwen2.5:14b` místo `ollama_chat/qwen2.5:14b`) |
+| Model odpovídá prázdnem, žádná chyba, žádné volání nástroje | prefix `ollama/` místo `ollama_chat/` |
 | Volání jde na localhost, i když má jít do cloudu | v prostředí zbyl `MODEL` nebo `API_BASE` z jiného projektu; systémová proměnná přebíjí `.env` |
 | `anthropic-workspace-id is required` | klíč navázaný na identitu, viz výše |
 | Endpoint odpovídá, ale model „není" | LM Studio uvolnilo model po TTL — `lms ps`, pak `lms load` |

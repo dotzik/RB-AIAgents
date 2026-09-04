@@ -37,7 +37,7 @@ cp .env.example .env
 
 | Proměnná | Výchozí | K čemu |
 |---|---|---|
-| `TIMEAGENT_MODEL` | `ollama/qwen2.5:14b` | model ve tvaru `poskytovatel/název` |
+| `TIMEAGENT_MODEL` | `ollama_chat/qwen2.5:14b` | model ve tvaru `poskytovatel/název` |
 | `TIMEAGENT_API_BASE` | — | endpoint pro lokální a self-hosted modely |
 | `TIMEAGENT_DB` | `data/timeagent.sqlite` | cesta k databázi |
 | `TIMEAGENT_BENCH_MONTH` | `2026-08` | měsíc, na kterém měří `timeagent bench` |

@@ -15,8 +15,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Menší modely tool calling v této úloze nezvládají — viz README, Srovnání modelů.
-DEFAULT_MODEL = "ollama/qwen2.5:14b"
+# Prefix `ollama_chat/`, ne `ollama/`: ten druhý používá starší cestu, na které
+# novější modely (qwen3, gpt-oss) tiše vrátí prázdnou odpověď místo volání
+# nástroje. Podrobnosti v docs/modely.md.
+# Menší modely tool calling v této úloze nezvládají — viz docs/mereni.md.
+DEFAULT_MODEL = "ollama_chat/qwen2.5:14b"
 
 
 def _env(specific: str, generic: str) -> str | None:

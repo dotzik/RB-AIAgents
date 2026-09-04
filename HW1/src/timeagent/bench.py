@@ -5,8 +5,8 @@ pustí stejnou sadu dotazů proti každému zadanému modelu, změří čas a to
 a ověří, jestli v odpovědi jsou správné údaje — ty se berou přímo z databáze,
 takže kontrola platí i po přegenerování demo dat.
 
-    uv run timeagent bench --models ollama/qwen2.5:14b --repeat 3
-    uv run timeagent bench --models ollama/qwen2.5:32b --api-base http://192.168.0.24:11434
+    uv run timeagent bench --models ollama_chat/qwen2.5:14b --repeat 3
+    uv run timeagent bench --models ollama_chat/qwen2.5:32b --api-base http://192.168.0.24:11434
 
 Výstup je markdownová tabulka — rovnou k vložení do dokumentace.
 """

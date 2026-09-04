@@ -33,7 +33,7 @@ cd HW1
 cp .env.example .env
 uv sync
 
-ollama pull qwen2.5:14b        # výchozí model; menší nestačí, viz docs/mereni.md
+ollama pull qwen2.5:14b        # výchozí model — v měření 39/39, viz docs/mereni.md
 uv run timeagent seed          # vygeneruje demo databázi
 uv run timeagent ask "Kolik hodin jsem odpracoval v 2026-08?"
 ```

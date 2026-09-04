@@ -87,8 +87,8 @@ jestli v odpovědi zazněla správná čísla. Podrobnosti o metodice v
 [mereni.md](mereni.md).
 
 ```bash
-uv run timeagent bench --models ollama/qwen2.5:14b
-uv run timeagent bench --models ollama/qwen2.5:14b,ollama/qwen2.5:32b \
+uv run timeagent bench --models ollama_chat/qwen2.5:14b
+uv run timeagent bench --models ollama_chat/qwen2.5:14b,ollama_chat/qwen2.5:32b \
                        --api-base http://192.168.0.24:11434 --json
 ```
 
