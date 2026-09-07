@@ -20,59 +20,70 @@ který z téhož zdroje generuje `scripts/export_system_prompt.py`
 Osm dotazů z benchmarkové sady HW1 — táž sada jako v HW2, importovaná přímo
 z `HW2/scripts/compare_platforms.py`. Spouští je `scripts/compare_clients.py`;
 očekávané hodnoty se počítají z nástrojů, ne z opsaných konstant.
+**Tři běhy na klienta**, protože jeden průchod u téhle úlohy nestačí — proč,
+je celá další sekce.
 
 | | LangGraph | Pydantic AI | Microsoft Agent Framework |
 |---|---|---|---|
-| správně | 7/8 | **8/8** | **8/8** |
-| celkem | 109,8 s | 120,3 s | 112,4 s |
-| medián na dotaz | 13,0 s | 14,3 s | 15,2 s |
-| volání nástrojů | 9 | 9 | 10 |
+| skóre ve třech bězích | 7, 7, 7 | **8, 8, 8** | 8, 7, 8 |
+| medián na dotaz | 13,2 s | 15,6 s | **12,5 s** |
+| padlo aspoň jednou | `ukonceny` | — | `ukonceny` |
 
 Časy jsou v rámci šumu — všichni čekají na tentýž model a devět z deseti sekund
 běhu je inference. **Framework se na rychlosti neprojeví.** Pro srovnání s HW2
-(n8n 8/8, medián 12,7 s; LangFlow 8/8, medián 15,4 s): MCP vrstva nic nezpomalila.
+(n8n i LangFlow 8/8): MCP vrstva nic nezpomalila.
 
-## Jediný rozdíl ve výsledku: co se stane po chybě nástroje
+Rozdíl ve skóre má **jedinou** příčinu: dotaz `ukonceny`. Na ostatních sedmi
+dotazech dali všichni tři klienti ve všech devíti bězích správnou odpověď.
 
-Za celým rozdílem stojí jeden dotaz — *„Pracoval jsem v srpnu 2026 na projektu
-Initech?"*. Model si u něj napsal jméno projektu s překlepem a nástroj vrátil
-chybu jako data:
+## Ten jeden dotaz — a proč se z něj nedá dělat závěr o frameworku
 
-```json
-{"error": "Projekt 'Initect' neexistuje. Dostupné: ACME (Acme Corp), …"}
-```
+Dotaz zní *„Pracoval jsem v srpnu 2026 na projektu Initech?"*. Selhání má
+pokaždé stejný tvar, doložený uloženou trasou volání v [`mereni.json`](mereni.json):
 
-Tím je splněná záruka ze serveru: model má hlášku k dispozici a **může** se
-opravit. Jestli to udělá, rozhoduje smyčka frameworku.
-
-**LangGraph** skončil po jednom kole a hlášku opsal do odpovědi jako výsledek —
-navíc s obrácenou odpovědí („Pracoval jsi…", správně je nepracoval):
-
-> „Pracoval jsi v srpnu 2026 na projektu Initech (záznamy jsou dostupné pro
-> projekty: ACME, NWND, GLBX, INIT, INTR). Zkontroluj jméno projektu a zkus to
-> znovu."
+1. model zavolá `query_time_entries` s **překlepem** `project: "Initect"`,
+2. nástroj vrátí `{"error": "Projekt 'Initect' neexistuje. Dostupné: …"}`,
+3. model **neudělá druhé volání** a napíše odpověď, která tvrdí opak pravdy
+   („Pracoval jsi…") a navíc do ní opíše seznam projektů z chybové hlášky.
 
 Systémový prompt přitom obsahuje pravidlo „Chybovou hlášku z nástroje nikdy
-nepiš do odpovědi jako výsledek". Chování je při temperature 0 reprodukovatelné.
+nepiš do odpovědi jako výsledek". Nepomohlo.
 
-**Microsoft Agent Framework** narazil na týž překlep, ale udělal **druhé volání**
-a opravil se:
+**Kdo na to sedne, se ale mezi sadami běhů úplně obrací.** Nezávislá prověrka
+pustila tentýž skript třikrát na tomtéž stroji a dostala jiné rozdělení:
 
-> „V srpnu 2026 jsi na projektu Initech žádné hodiny neodpracoval.
-> Data jsou k dispozici od 2025-01-01 do 2026-09-04."
+| | LangGraph | Pydantic AI | Microsoft AF |
+|---|---|---|---|
+| tři běhy zde | **3× padlo** | 0× | 1× |
+| tři běhy v nezávislé prověrce | 0× | 2× | 1× |
 
-**Pydantic AI** trefil jméno napoprvé a odpověděl správně na jedno volání.
+Šest běhů na klienta a pořadí se převrátí. Závěr je proto **negativní a je to
+jediný závěr, který data unesou**:
 
-Druhá věta u MAF nepochází z modelu — je to `note` z `_empty_note` v HW1.
-Prošlo celou cestou přes MCP a klient ho modelu předal.
+> Chování po chybě nástroje **není v tomhle měření vlastnost frameworku**.
+> Všichni tři klienti mají tentýž způsob selhání a liší se jen tím, jak často
+> ho model zrovna trefí. Rozhoduje, jestli model napíše překlep — a to je
+> vlastnost dekódování, ne smyčky.
 
-Je to jedno pozorování na framework, ne statistika. Ukazuje ale, že „chyba jako
-data" je **nutná, ne dostatečná** podmínka: server dá modelu šanci se opravit,
-ale využít ji musí agentní smyčka. Prebuilt `create_react_agent` v LangGraphu tu
-šanci u tohohle modelu nevyužil.
+Temperature 0 tady determinismus nezaručuje: u dávkované inference na GPU se
+pořadí redukcí mezi běhy liší a u odpovědi, která visí na hraně, to stačí.
 
-Připomínka z HW2: tenhle dotaz je past, protože `INIT` je Initech a `INTR` je
-Interní. Tam na ni oba agenti aspoň jednou sedli jinak — popsali nulu jménem
+**Dřívější verze tohohle dokumentu tvrdila opak** — že LangGraph po chybě
+neudělá druhé kolo, zatímco MAF ano, a že je to při temperature 0
+reprodukovatelné. Stálo to na jednom běhu a jednom ručním zopakování. Nebyla to
+pravda; byl to šum vysvětlený jako mechanismus. Opraveno přidáním `--repeat`,
+což je přesně to, co si HW1 v `docs/mereni.md` sám předepsal a co se sem
+nepřeneslo.
+
+### Co by tenhle dotaz opravdu spravilo
+
+Ne jiný framework. Buď **nástroj, který na otázku umí odpovědět** —
+`project_activity(project)` s prvním a posledním záznamem — nebo **tolerance
+k překlepu** v `_resolve_project` (fuzzy shoda, když přesná selže). Dnes se měří
+hlavně to, že žádný nástroj přesně na tuhle otázku nesedí.
+
+Připomínka z HW2: dotaz je past i jinak, protože `INIT` je Initech a `INTR`
+Interní. Tam na ni obě platformy aspoň jednou sedly — popsaly nulu jménem
 druhého projektu.
 
 ## Kolik kódu je potřeba
@@ -84,9 +95,9 @@ framework:
 | | řádků | co obsluhuje sám |
 |---|---|---|
 | HW1 — vlastní smyčka | 374 | vše |
-| LangGraph | 143 | CLI a výpis |
-| Pydantic AI | 135 | CLI a výpis |
-| Microsoft Agent Framework | 190 | CLI, výpis, čtení `.env`, dosazení data do promptu |
+| LangGraph | 156 | CLI, výpis, ošetření výpadků |
+| Pydantic AI | 148 | CLI, výpis, ošetření výpadků |
+| Microsoft Agent Framework | 214 | totéž + čtení `.env`, dosazení data do promptu |
 
 Jádro každého z nich jsou tři až pět řádků:
 
@@ -119,12 +130,17 @@ dědí z `AIFunction`, takže jde do `ChatClientAgent` rovnou.
 
 ## Co který framework dělá jinak
 
+Když se ukázalo, že na úspěšnosti si jsou rovné, zbývá to zajímavější — v čem
+se liší práce s nimi:
+
 - **LangGraph** je jediný, kde je agent explicitně **graf**. `create_react_agent`
-  je hotová dvojice uzlů (model ⇄ nástroje); jakmile by bylo potřeba do smyčky
-  zasáhnout — vlastní podmínka ukončení, krok navíc po chybě — sáhne se pod něj
-  a graf se poskládá ručně. Tady by to zrovna pomohlo.
+  je hotová dvojice uzlů (model ⇄ nástroje). Jakmile je potřeba do smyčky
+  zasáhnout — vynutit krok navíc po chybě, vlastní podmínka ukončení — sáhne se
+  pod něj a graf se poskládá ručně. Z těch tří je to jediný, kde je ten zásah
+  přirozený, ne obcházení.
 - **Pydantic AI** má MCP zabudované jako *toolset*: `MCPToolset(url)` je celé
-  napojení včetně životního cyklu spojení přes `async with agent`.
+  napojení včetně životního cyklu spojení přes `async with agent`. Nejmíň kódu
+  na nejmíň práce.
 - **Microsoft Agent Framework** staví na `IChatClient` z Microsoft.Extensions.AI.
   `ChatClientAgent` drží instrukce, nástroje i smyčku, takže odpadá ruční
   `UseFunctionInvocation()` i skládání seznamu zpráv. Nabízí navíc sezení
@@ -137,9 +153,12 @@ dědí z `AIFunction`, takže jde do `ChatClientAgent` rovnou.
 promptu do JSONu, protože na balíček z HW1 nedosáhne. Obojí je daň za to, že
 doména je v Pythonu — ne za framework.
 
+Všichni tři hlásí výpadek závislosti stejně: jedna věta s nápovědou a nenulový
+návratový kód, ať už nejede MCP server nebo model.
+
 ## Poznámka k datům
 
 Naměřená tabulka je z aktuálních dat (leden 2025 až dnešek, 1238 záznamů).
 **Citace odpovědí se nepřepisují** — jsou to záznamy pozorování.
 
-Surová data měření: [`mereni.json`](mereni.json).
+Surová data včetně trasy volání u každého dotazu: [`mereni.json`](mereni.json).

@@ -15,6 +15,10 @@ z [HW2](../HW2/)**, takže nad jedním serverem běží pět různých klientů.
 | `agents/langgraph` | **LangGraph** (`create_react_agent`) | ano |
 | `agents/python` | Pydantic AI | ne — přidán pro srovnání |
 
+Zadání chce **jeden** framework ze seznamu; ze seznamu jsou dva
+(Microsoft Agent Framework a LangGraph). Pydantic AI na seznamu není a je tu
+navíc, jako třetí bod srovnání — ne jako odevzdávané řešení.
+
 Typ agenta je u všech tří **ReAct**: model zavolá nástroj, dostane výsledek
 a pokračuje, dokud nemá odpověď.
 
@@ -38,16 +42,18 @@ Podrobnosti v [docs/instalace.md](docs/instalace.md).
 
 ## Výsledek
 
-Osm dotazů z benchmarkové sady HW1, model `qwen2.5:32b` na DGX Sparku:
+Osm dotazů z benchmarkové sady HW1, model `qwen2.5:32b` na DGX Sparku,
+**tři běhy na klienta**:
 
-| | Python (Pydantic AI) | .NET (Microsoft.Extensions.AI) |
-|---|---|---|
-| správně | **8/8** | **8/8** |
-| medián na dotaz | 13,7 s | 12,6 s |
+| | LangGraph | Pydantic AI | Microsoft Agent Framework |
+|---|---|---|---|
+| skóre ve třech bězích | 7, 7, 7 | **8, 8, 8** | 8, 7, 8 |
+| medián na dotaz | 13,2 s | 15,6 s | **12,5 s** |
 
-Framework se na rychlosti neprojeví — devět z deseti sekund běhu je inference.
-Rozdíl je v tom, kolik kódu je potřeba napsat, a ten je popsaný
-v [docs/srovnani.md](docs/srovnani.md).
+Rozdíl ve skóre dělá jediný dotaz a **není to vlastnost frameworku** — nezávislá
+prověrka dostala ve svých třech bězích opačné rozdělení. Proč a co z toho plyne
+je v [docs/srovnani.md](docs/srovnani.md); je to zároveň nejdůležitější věc,
+kterou tenhle úkol ukázal.
 
 ## Dvě rozhodnutí, která stojí za přečtení
 

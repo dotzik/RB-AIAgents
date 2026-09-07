@@ -195,6 +195,9 @@ def query_time_entries(
     return out
 
 
+# Kolik skupin summarize_by vypíše. Zbytek se ořízne a řekne se to v `note`.
+MAX_GROUPS = 30
+
 _DIMENSIONS: dict[str, str] = {
     "project": "e.project_id",
     "client": "p.client",
@@ -244,14 +247,30 @@ def summarize_by(
         note = _empty_note(conn) if not rows else None
 
     groups = db.rows_to_dicts(rows)
+    # Součet ze všech skupin, i těch odříznutých — strop platí na výpis, ne na
+    # matematiku.
+    total = round(sum(g["hours"] for g in groups), 2)
+
+    # Strop výpisu ze stejného důvodu jako u `query_time_entries`: výsledek
+    # nástroje se posílá modelu v každém dalším kroku znovu. Rozpad po dnech za
+    # dva roky je legitimní dotaz a dá 425 skupin, tedy ~7 700 tokenů v jednom
+    # výsledku — čtvrtina okna, na každý krok. Skupiny jsou seřazené sestupně,
+    # takže odříznuté jsou ty nejmenší.
+    omitted = max(0, len(groups) - MAX_GROUPS)
     out = {
         "dimension": dimension,
         "date_from": date_from,
         "date_to": date_to,
-        "total_hours": round(sum(g["hours"] for g in groups), 2),
-        "groups": groups,
+        "total_hours": total,
+        "group_count": len(groups),
+        "groups": groups[:MAX_GROUPS],
     }
-    if note:
+    if omitted:
+        out["note"] = (
+            f"Zobrazeno {MAX_GROUPS} největších skupin z {len(groups)}; "
+            f"zbylých {omitted} je menších. `total_hours` je součet ze všech."
+        )
+    elif note:
         out["note"] = note
     return out
 
@@ -425,7 +444,8 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "Souhrn hodin seskupený podle zvolené dimenze, seřazený sestupně. "
                 "Vrací pro každou skupinu její název a odpracované hodiny. Použij "
                 "vždy, když se ptáš 'na čem/kdy nejvíc' nebo potřebuješ rozpad — "
-                "první skupina ve výsledku je ta s nejvíce hodinami."
+                "první skupina ve výsledku je ta s nejvíce hodinami. Vypíše se "
+                "nejvýš 30 největších skupin; total_hours je vždy součet ze všech."
             ),
             "parameters": {
                 "type": "object",

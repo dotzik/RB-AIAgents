@@ -3,7 +3,7 @@
 Pravda se nebere z ručně opsaných čísel, ale počítá se **z téhož API**, které
 volají agenti — test tak nezestárne, když se přegeneruje demo dataset.
 
-    python scripts/compare_platforms.py                 # obě platformy
+    python scripts/compare_platforms.py --repeat 3      # obě platformy
     python scripts/compare_platforms.py --only n8n
     python scripts/compare_platforms.py --json vysledky.json
 """
@@ -37,11 +37,13 @@ CASES: list[dict] = [
         "expect": lambda t: [t["srpen"]["total"]],
     },
     {
-        # Hodiny musí sedět vždy; u částky stačí jedna z obou, protože „85 305 Kč
-        # včetně DPH" je na tuhle otázku stejně dobrá odpověď jako základ bez DPH.
+        # Otázka se ptá na částku, takže se vyžaduje jen částka — a stačí jedna
+        # z obou, protože „85 305 Kč včetně DPH" je stejně dobrá odpověď jako
+        # základ bez DPH. Hodiny se dřív vyžadovaly taky; HW1 tuhle přísnost
+        # popsal jako vadu metriky (docs/mereni.md), tady zůstala. Odstraněno.
         "id": "faktura",
         "question": "Kolik jsem v srpnu 2026 nafakturoval klientovi Acme?",
-        "expect": lambda t: [t["acme"]["hours"]],
+        "expect": lambda t: [],
         "any_number_of": lambda t: [t["acme"]["base"], t["acme"]["incl"]],
     },
     {
@@ -192,8 +194,14 @@ def langflow_handles() -> tuple[str, str]:
 
 
 def main() -> int:
+    # Konzole na Windows jede v cp1252 a české výpisy by na ní spadly.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
+
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--only", choices=["n8n", "langflow"])
+    ap.add_argument("--repeat", type=int, default=3, help="kolik běhů na platformu")
     ap.add_argument("--json", type=Path, help="uložit surové výsledky")
     args = ap.parse_args()
 
@@ -210,26 +218,39 @@ def main() -> int:
         platforms.append(("LangFlow", lambda q, s: ask_langflow(q, s, flow_id, key)))
 
     stamp = int(time.time())
-    results: dict = {"truth": t, "runs": {}}
+    results: dict = {"truth": t, "repeat": args.repeat, "runs": {}}
 
     for label, ask in platforms:
-        print(f"\n=== {label} ===")
-        rows = []
-        for case in CASES:
-            started = time.perf_counter()
-            try:
-                answer = ask(case["question"], f"cmp-{label}-{case['id']}-{stamp}")
-                ok, note = check(case, answer, t)
-            except Exception as exc:  # noqa: BLE001 — chyba platformy je taky výsledek
-                answer, ok, note = "", False, f"selhalo: {type(exc).__name__}"
-            secs = round(time.perf_counter() - started, 1)
-            rows.append({"id": case["id"], "ok": ok, "note": note,
-                         "seconds": secs, "answer": answer})
-            print(f"  {'OK  ' if ok else 'CHYBA'} {case['id']:<10} {secs:>6}s  {note}")
-        passed = sum(r["ok"] for r in rows)
-        total_time = round(sum(r["seconds"] for r in rows), 1)
-        print(f"  --- {passed}/{len(rows)} správně, {total_time} s celkem")
-        results["runs"][label] = {"rows": rows, "passed": passed, "seconds": total_time}
+        runs = []
+        for n in range(args.repeat):
+            print(f"\n=== {label} — běh {n + 1}/{args.repeat} ===")
+            rows = []
+            for case in CASES:
+                started = time.perf_counter()
+                try:
+                    session = f"cmp-{label}-{case['id']}-{stamp}-{n}"
+                    answer = ask(case["question"], session)
+                    ok, note = check(case, answer, t)
+                except Exception as exc:  # noqa: BLE001 — chyba platformy je taky výsledek
+                    answer, ok, note = "", False, f"selhalo: {type(exc).__name__}"
+                secs = round(time.perf_counter() - started, 1)
+                rows.append({"id": case["id"], "ok": ok, "note": note,
+                             "seconds": secs, "answer": answer})
+                print(f"  {'OK  ' if ok else 'CHYBA'} {case['id']:<10} {secs:>6}s  {note}")
+            passed = sum(r["ok"] for r in rows)
+            total_time = round(sum(r["seconds"] for r in rows), 1)
+            print(f"  --- {passed}/{len(rows)} správně, {total_time} s celkem")
+            runs.append({"rows": rows, "passed": passed, "seconds": total_time})
+
+        scores = [r["passed"] for r in runs]
+        # Které případy padly aspoň jednou. Skóre jednoho běhu je u hraničních
+        # dotazů hod mincí — proto se opakuje, viz HW1/docs/mereni.md.
+        flaky = sorted({row["id"] for r in runs for row in r["rows"] if not row["ok"]})
+        results["runs"][label] = {"runs": runs, "scores": scores,
+                                  "failed_at_least_once": flaky}
+        print(f"\n  === {label}: {scores} z {len(CASES)}")
+        if flaky:
+            print(f"      aspoň jednou padlo: {', '.join(flaky)}")
 
     if args.json:
         args.json.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")

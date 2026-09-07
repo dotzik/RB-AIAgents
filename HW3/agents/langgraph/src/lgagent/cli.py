@@ -83,6 +83,18 @@ async def _ask(question: str, mcp_url: str, model_name: str, ollama_base: str) -
     }
 
 
+def _hint(exc: Exception, mcp_url: str, ollama_base: str) -> str:
+    """Jedna věta s nápovědou místo stack trace. Vzor: HW1/src/timeagent/llm.py."""
+    text = f"{type(exc).__name__}: {exc}"
+    if "connect" in text.lower() or "refused" in text.lower():
+        return (
+            f"{text}\nNedosáhl jsem na MCP server ({mcp_url}) nebo na model "
+            f"({ollama_base}). MCP zvedne `cd HW3 && docker compose up -d`; "
+            "adresu modelu drží OLLAMA_BASE_URL v HW3/.env."
+        )
+    return text
+
+
 def _setup_stdout() -> None:
     """Konzole na Windows jede v cp1252 a české odpovědi by na ní spadly."""
     for stream in (sys.stdout, sys.stderr):
@@ -124,10 +136,11 @@ def main(argv: list[str] | None = None) -> int:
             _ask(args.question, args.mcp_url, args.model, args.ollama_url)
         )
     except Exception as exc:  # noqa: BLE001 — CLI má selhat srozumitelně
+        message = _hint(exc, args.mcp_url, args.ollama_url)
         if args.json:
-            print(json.dumps({"error": f"{type(exc).__name__}: {exc}"}, ensure_ascii=False))
+            print(json.dumps({"error": message}, ensure_ascii=False))
         else:
-            print(f"Chyba: {type(exc).__name__}: {exc}", file=sys.stderr)
+            print(f"Chyba: {message}", file=sys.stderr)
         return 1
 
     if args.json:

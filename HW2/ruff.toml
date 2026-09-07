@@ -9,6 +9,8 @@ extend-select = ["UP", "SIM", "RUF", "DTZ", "B", "C4", "I"]
 ignore = ["DTZ007", "DTZ011", "RUF001", "RUF002", "RUF003"]
 
 [lint.per-file-ignores]
+# Skripty sahající do HW1 přes sys.path musí importovat až po jeho úpravě.
+"scripts/*.py" = ["E402"]
 # Generátor pro LangFlow musí importovat až po úpravě sys.path — knihovny `lfx`
 # jsou dostupné jen uvnitř kontejneru.
 "scripts/build_langflow_flow.py" = ["E402"]

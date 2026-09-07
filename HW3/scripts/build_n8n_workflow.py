@@ -5,7 +5,8 @@ Jeden uzel mcpClientTool místo pěti toolHttpRequest z HW2 — MCP posílá
 
     python scripts/build_n8n_workflow.py --credential-id <id_ollama_credential>
 
-Id credentialu je v n8n vidět v URL po jeho otevření; v JSONu žádné tajemství není.
+Bez `--credential-id` se do JSONu zapíše zástupná hodnota a credential se
+po importu vybere v UI. Konkrétní ID patří jen do lokálního běhu.
 """
 from __future__ import annotations
 
@@ -135,8 +136,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
         "--credential-id",
-        required=True,
-        help="ID credentialu na Ollamu v n8n (z URL po jeho otevření)",
+        default="OLLAMA-CREDENTIAL-ID",
+        help=("ID credentialu na Ollamu v n8n. Bez něj se zapíše zástupná "
+              "hodnota — do odevzdávaného JSONu identifikátor konkrétní "
+              "instance nepatří; po importu se credential vybere v UI."),
     )
     ap.add_argument("--credential-name", default="Ollama — DGX Spark")
     args = ap.parse_args()

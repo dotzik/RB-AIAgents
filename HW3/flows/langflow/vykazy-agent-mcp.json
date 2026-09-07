@@ -2,7 +2,7 @@
   "data": {
     "nodes": [
       {
-        "id": "ChatInput-9vvhj",
+        "id": "ChatInput-cZ4Zx",
         "type": "genericNode",
         "position": {
           "x": 0,
@@ -10,7 +10,7 @@
         },
         "selected": false,
         "data": {
-          "id": "ChatInput-9vvhj",
+          "id": "ChatInput-cZ4Zx",
           "type": "ChatInput",
           "node": {
             "base_classes": [
@@ -302,7 +302,7 @@
         }
       },
       {
-        "id": "Agent-4HBla",
+        "id": "Agent-M1NnF",
         "type": "genericNode",
         "position": {
           "x": 0,
@@ -310,7 +310,7 @@
         },
         "selected": false,
         "data": {
-          "id": "Agent-4HBla",
+          "id": "Agent-M1NnF",
           "type": "Agent",
           "node": {
             "base_classes": [
@@ -888,7 +888,7 @@
                 "trace_as_metadata": true,
                 "track_in_telemetry": false,
                 "type": "str",
-                "value": "Jsi asistent pro analýzu výkazů odpracovaného času. Odpovídáš česky, stručně a věcně.\n\nPravidla:\n- Čísla nikdy neodhaduj ani nepočítej zpaměti — vždy je zjisti nástrojem.\n- Když neznáš přesný název projektu, nejdřív si vypiš projekty nástrojem list_projects.\n- Data zadávej v ISO formátu (YYYY-MM-DD), měsíce jako YYYY-MM.\n- Složitější dotaz rozlož na víc volání nástrojů za sebou (např. porovnání dvou období\n  = dvě volání) a teprve pak odpověz.\n- Nepovinný parametr prostě vynech — neposílej \"null\" ani prázdný řetězec.\n- Nevolej dvakrát tentýž nástroj se stejnými argumenty; výsledek už máš výš.\n- Když nástroj vrátí pole \"error\", oprav argumenty a zkus to znovu.\n- Chybovou hlášku z nástroje nikdy nepiš do odpovědi jako výsledek.\n- Uveď jen čísla, která ti v této odpovědi vrátil nástroj. Nikdy nepokračuj\n  v trendu, neodhaduj podle jiných měsíců a nepřebírej čísla z dřívější\n  konverzace — ta mohou být chybná.\n- Když nástroj vrátí nulu, prázdný seznam nebo pole \"note\", řekni rovnou, že\n  za dané období nejsou záznamy, a uveď rozsah dostupných dat z \"note\".\n- V odpovědi uveď konkrétní čísla, u peněz i měnu.\n\nDnešní datum je 2026-09-06 (neděle). Aktuální měsíc je 2026-09.\n\nOdpovídej prostým textem bez markdownu."
+                "value": "Jsi asistent pro analýzu výkazů odpracovaného času. Odpovídáš česky, stručně a věcně.\n\nPravidla:\n- Čísla nikdy neodhaduj ani nepočítej zpaměti — vždy je zjisti nástrojem.\n- Když neznáš přesný název projektu, nejdřív si vypiš projekty nástrojem list_projects.\n- Data zadávej v ISO formátu (YYYY-MM-DD), měsíce jako YYYY-MM.\n- Složitější dotaz rozlož na víc volání nástrojů za sebou (např. porovnání dvou období\n  = dvě volání) a teprve pak odpověz.\n- Nepovinný parametr prostě vynech — neposílej \"null\" ani prázdný řetězec.\n- Nevolej dvakrát tentýž nástroj se stejnými argumenty; výsledek už máš výš.\n- Když nástroj vrátí pole \"error\", oprav argumenty a zkus to znovu.\n- Chybovou hlášku z nástroje nikdy nepiš do odpovědi jako výsledek.\n- Uveď jen čísla, která ti v této odpovědi vrátil nástroj. Nikdy nepokračuj\n  v trendu, neodhaduj podle jiných měsíců a nepřebírej čísla z dřívější\n  konverzace — ta mohou být chybná.\n- Když nástroj vrátí nulu, prázdný seznam nebo pole \"note\", řekni rovnou, že\n  za dané období nejsou záznamy, a uveď rozsah dostupných dat z \"note\".\n- V odpovědi uveď konkrétní čísla, u peněz i měnu.\n\nDnešní datum je 2026-09-07 (pondělí). Aktuální měsíc je 2026-09.\n\nOdpovídej prostým textem bez markdownu."
               },
               "tools": {
                 "_input_type": "HandleInput",
@@ -923,7 +923,7 @@
         }
       },
       {
-        "id": "ChatOutput-Whct9",
+        "id": "ChatOutput-Cett7",
         "type": "genericNode",
         "position": {
           "x": 0,
@@ -931,7 +931,7 @@
         },
         "selected": false,
         "data": {
-          "id": "ChatOutput-Whct9",
+          "id": "ChatOutput-Cett7",
           "type": "ChatOutput",
           "node": {
             "base_classes": [
@@ -1230,7 +1230,7 @@
         }
       },
       {
-        "id": "ext:ollama:ChatOllamaComponent@official-KgXbz",
+        "id": "ext:ollama:ChatOllamaComponent@official-5zISQ",
         "type": "genericNode",
         "position": {
           "x": 0,
@@ -1238,7 +1238,7 @@
         },
         "selected": false,
         "data": {
-          "id": "ext:ollama:ChatOllamaComponent@official-KgXbz",
+          "id": "ext:ollama:ChatOllamaComponent@official-5zISQ",
           "type": "ext:ollama:ChatOllamaComponent@official",
           "node": {
             "template": {
@@ -2133,7 +2133,7 @@
         }
       },
       {
-        "id": "MCPTools-sjzi1",
+        "id": "MCPTools-DrFji",
         "type": "genericNode",
         "position": {
           "x": 0,
@@ -2141,7 +2141,7 @@
         },
         "selected": false,
         "data": {
-          "id": "MCPTools-sjzi1",
+          "id": "MCPTools-DrFji",
           "type": "MCPTools",
           "node": {
             "base_classes": [
@@ -2414,7 +2414,7 @@
         "data": {
           "sourceHandle": {
             "dataType": "ChatInput",
-            "id": "ChatInput-9vvhj",
+            "id": "ChatInput-cZ4Zx",
             "name": "message",
             "output_types": [
               "Message"
@@ -2422,19 +2422,19 @@
           },
           "targetHandle": {
             "fieldName": "input_value",
-            "id": "Agent-4HBla",
+            "id": "Agent-M1NnF",
             "inputTypes": [
               "Message"
             ],
             "type": "str"
           }
         },
-        "id": "reactflow__edge-ChatInput-9vvhj{œdataTypeœ:œChatInputœ,œidœ:œChatInput-9vvhjœ,œnameœ:œmessageœ,œoutput_typesœ:[œMessageœ]}-Agent-4HBla{œfieldNameœ:œinput_valueœ,œidœ:œAgent-4HBlaœ,œinputTypesœ:[œMessageœ],œtypeœ:œstrœ}",
+        "id": "reactflow__edge-ChatInput-cZ4Zx{œdataTypeœ:œChatInputœ,œidœ:œChatInput-cZ4Zxœ,œnameœ:œmessageœ,œoutput_typesœ:[œMessageœ]}-Agent-M1NnF{œfieldNameœ:œinput_valueœ,œidœ:œAgent-M1NnFœ,œinputTypesœ:[œMessageœ],œtypeœ:œstrœ}",
         "selected": false,
-        "source": "ChatInput-9vvhj",
-        "sourceHandle": "{œdataTypeœ:œChatInputœ,œidœ:œChatInput-9vvhjœ,œnameœ:œmessageœ,œoutput_typesœ:[œMessageœ]}",
-        "target": "Agent-4HBla",
-        "targetHandle": "{œfieldNameœ:œinput_valueœ,œidœ:œAgent-4HBlaœ,œinputTypesœ:[œMessageœ],œtypeœ:œstrœ}"
+        "source": "ChatInput-cZ4Zx",
+        "sourceHandle": "{œdataTypeœ:œChatInputœ,œidœ:œChatInput-cZ4Zxœ,œnameœ:œmessageœ,œoutput_typesœ:[œMessageœ]}",
+        "target": "Agent-M1NnF",
+        "targetHandle": "{œfieldNameœ:œinput_valueœ,œidœ:œAgent-M1NnFœ,œinputTypesœ:[œMessageœ],œtypeœ:œstrœ}"
       },
       {
         "animated": false,
@@ -2442,7 +2442,7 @@
         "data": {
           "sourceHandle": {
             "dataType": "ext:ollama:ChatOllamaComponent@official",
-            "id": "ext:ollama:ChatOllamaComponent@official-KgXbz",
+            "id": "ext:ollama:ChatOllamaComponent@official-5zISQ",
             "name": "model_output",
             "output_types": [
               "LanguageModel"
@@ -2450,19 +2450,19 @@
           },
           "targetHandle": {
             "fieldName": "model",
-            "id": "Agent-4HBla",
+            "id": "Agent-M1NnF",
             "inputTypes": [
               "LanguageModel"
             ],
             "type": "model"
           }
         },
-        "id": "reactflow__edge-ext:ollama:ChatOllamaComponent@official-KgXbz{œdataTypeœ:œext:ollama:ChatOllamaComponent@officialœ,œidœ:œext:ollama:ChatOllamaComponent@official-KgXbzœ,œnameœ:œmodel_outputœ,œoutput_typesœ:[œLanguageModelœ]}-Agent-4HBla{œfieldNameœ:œmodelœ,œidœ:œAgent-4HBlaœ,œinputTypesœ:[œLanguageModelœ],œtypeœ:œmodelœ}",
+        "id": "reactflow__edge-ext:ollama:ChatOllamaComponent@official-5zISQ{œdataTypeœ:œext:ollama:ChatOllamaComponent@officialœ,œidœ:œext:ollama:ChatOllamaComponent@official-5zISQœ,œnameœ:œmodel_outputœ,œoutput_typesœ:[œLanguageModelœ]}-Agent-M1NnF{œfieldNameœ:œmodelœ,œidœ:œAgent-M1NnFœ,œinputTypesœ:[œLanguageModelœ],œtypeœ:œmodelœ}",
         "selected": false,
-        "source": "ext:ollama:ChatOllamaComponent@official-KgXbz",
-        "sourceHandle": "{œdataTypeœ:œext:ollama:ChatOllamaComponent@officialœ,œidœ:œext:ollama:ChatOllamaComponent@official-KgXbzœ,œnameœ:œmodel_outputœ,œoutput_typesœ:[œLanguageModelœ]}",
-        "target": "Agent-4HBla",
-        "targetHandle": "{œfieldNameœ:œmodelœ,œidœ:œAgent-4HBlaœ,œinputTypesœ:[œLanguageModelœ],œtypeœ:œmodelœ}"
+        "source": "ext:ollama:ChatOllamaComponent@official-5zISQ",
+        "sourceHandle": "{œdataTypeœ:œext:ollama:ChatOllamaComponent@officialœ,œidœ:œext:ollama:ChatOllamaComponent@official-5zISQœ,œnameœ:œmodel_outputœ,œoutput_typesœ:[œLanguageModelœ]}",
+        "target": "Agent-M1NnF",
+        "targetHandle": "{œfieldNameœ:œmodelœ,œidœ:œAgent-M1NnFœ,œinputTypesœ:[œLanguageModelœ],œtypeœ:œmodelœ}"
       },
       {
         "animated": false,
@@ -2470,7 +2470,7 @@
         "data": {
           "sourceHandle": {
             "dataType": "Agent",
-            "id": "Agent-4HBla",
+            "id": "Agent-M1NnF",
             "name": "response",
             "output_types": [
               "Message"
@@ -2478,7 +2478,7 @@
           },
           "targetHandle": {
             "fieldName": "input_value",
-            "id": "ChatOutput-Whct9",
+            "id": "ChatOutput-Cett7",
             "inputTypes": [
               "Data",
               "JSON",
@@ -2489,12 +2489,12 @@
             "type": "other"
           }
         },
-        "id": "reactflow__edge-Agent-4HBla{œdataTypeœ:œAgentœ,œidœ:œAgent-4HBlaœ,œnameœ:œresponseœ,œoutput_typesœ:[œMessageœ]}-ChatOutput-Whct9{œfieldNameœ:œinput_valueœ,œidœ:œChatOutput-Whct9œ,œinputTypesœ:[œDataœ,œJSONœ,œDataFrameœ,œTableœ,œMessageœ],œtypeœ:œotherœ}",
+        "id": "reactflow__edge-Agent-M1NnF{œdataTypeœ:œAgentœ,œidœ:œAgent-M1NnFœ,œnameœ:œresponseœ,œoutput_typesœ:[œMessageœ]}-ChatOutput-Cett7{œfieldNameœ:œinput_valueœ,œidœ:œChatOutput-Cett7œ,œinputTypesœ:[œDataœ,œJSONœ,œDataFrameœ,œTableœ,œMessageœ],œtypeœ:œotherœ}",
         "selected": false,
-        "source": "Agent-4HBla",
-        "sourceHandle": "{œdataTypeœ:œAgentœ,œidœ:œAgent-4HBlaœ,œnameœ:œresponseœ,œoutput_typesœ:[œMessageœ]}",
-        "target": "ChatOutput-Whct9",
-        "targetHandle": "{œfieldNameœ:œinput_valueœ,œidœ:œChatOutput-Whct9œ,œinputTypesœ:[œDataœ,œJSONœ,œDataFrameœ,œTableœ,œMessageœ],œtypeœ:œotherœ}"
+        "source": "Agent-M1NnF",
+        "sourceHandle": "{œdataTypeœ:œAgentœ,œidœ:œAgent-M1NnFœ,œnameœ:œresponseœ,œoutput_typesœ:[œMessageœ]}",
+        "target": "ChatOutput-Cett7",
+        "targetHandle": "{œfieldNameœ:œinput_valueœ,œidœ:œChatOutput-Cett7œ,œinputTypesœ:[œDataœ,œJSONœ,œDataFrameœ,œTableœ,œMessageœ],œtypeœ:œotherœ}"
       },
       {
         "animated": false,
@@ -2502,7 +2502,7 @@
         "data": {
           "sourceHandle": {
             "dataType": "MCPTools",
-            "id": "MCPTools-sjzi1",
+            "id": "MCPTools-DrFji",
             "name": "component_as_tool",
             "output_types": [
               "Tool"
@@ -2510,19 +2510,19 @@
           },
           "targetHandle": {
             "fieldName": "tools",
-            "id": "Agent-4HBla",
+            "id": "Agent-M1NnF",
             "inputTypes": [
               "Tool"
             ],
             "type": "other"
           }
         },
-        "id": "reactflow__edge-MCPTools-sjzi1{œdataTypeœ:œMCPToolsœ,œidœ:œMCPTools-sjzi1œ,œnameœ:œcomponent_as_toolœ,œoutput_typesœ:[œToolœ]}-Agent-4HBla{œfieldNameœ:œtoolsœ,œidœ:œAgent-4HBlaœ,œinputTypesœ:[œToolœ],œtypeœ:œotherœ}",
+        "id": "reactflow__edge-MCPTools-DrFji{œdataTypeœ:œMCPToolsœ,œidœ:œMCPTools-DrFjiœ,œnameœ:œcomponent_as_toolœ,œoutput_typesœ:[œToolœ]}-Agent-M1NnF{œfieldNameœ:œtoolsœ,œidœ:œAgent-M1NnFœ,œinputTypesœ:[œToolœ],œtypeœ:œotherœ}",
         "selected": false,
-        "source": "MCPTools-sjzi1",
-        "sourceHandle": "{œdataTypeœ:œMCPToolsœ,œidœ:œMCPTools-sjzi1œ,œnameœ:œcomponent_as_toolœ,œoutput_typesœ:[œToolœ]}",
-        "target": "Agent-4HBla",
-        "targetHandle": "{œfieldNameœ:œtoolsœ,œidœ:œAgent-4HBlaœ,œinputTypesœ:[œToolœ],œtypeœ:œotherœ}"
+        "source": "MCPTools-DrFji",
+        "sourceHandle": "{œdataTypeœ:œMCPToolsœ,œidœ:œMCPTools-DrFjiœ,œnameœ:œcomponent_as_toolœ,œoutput_typesœ:[œToolœ]}",
+        "target": "Agent-M1NnF",
+        "targetHandle": "{œfieldNameœ:œtoolsœ,œidœ:œAgent-M1NnFœ,œinputTypesœ:[œToolœ],œtypeœ:œotherœ}"
       }
     ],
     "viewport": {

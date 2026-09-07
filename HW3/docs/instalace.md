@@ -39,7 +39,8 @@ curl http://localhost:8011/health          # {"status":"ok","upstream":"http://a
 cd mcp-dotnet/TimeAgent.Mcp.Tests && dotnet test
 ```
 
-Testy podvrhují upstream, takže běží bez Dockeru i bez databáze.
+Testy podvrhují upstream, takže běží bez Dockeru i bez databáze. Shodu obou
+serverů ověří `cd HW3/mcp && uv run python ../scripts/compare_servers.py`.
 
 Všichni agenti na něj umí ukázat přepínačem:
 
@@ -91,8 +92,8 @@ Viz [napojeni-nocode.md](napojeni-nocode.md).
 ```bash
 cd HW3
 dotnet build agents/dotnet/McpAgent           # skript spouští s --no-build
-python scripts/compare_clients.py --json docs/mereni.json
-python scripts/compare_clients.py --only langgraph
+python scripts/compare_clients.py --repeat 3 --json docs/mereni.json
+python scripts/compare_clients.py --only langgraph --repeat 1
 ```
 
 Výsledky a jejich čtení: [srovnani.md](srovnani.md).

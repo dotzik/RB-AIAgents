@@ -4,6 +4,14 @@ Obě platformy dostaly **stejnou úlohu, stejných pět nástrojů, stejný syst
 prompt a stejný model** (`qwen2.5:32b` na DGX Sparku). Liší se jen platforma —
 proto se nástroje vystavily jako jedno HTTP API, viz [architektura.md](architektura.md).
 
+Že je prompt opravdu stejný, není slib. Oba generátory ho berou z jednoho
+zdroje — `timeagent.agent.build_system_prompt` v HW1: n8n builder importem,
+LangFlow přes `scripts/gen_langflow_flow.py`, který ho pošle do kontejneru
+proměnnou prostředí. Dřív tu byly tři samostatné literály a **jedno pravidlo
+se mezi n8n a LangFlow rozešlo**, takže se chvíli porovnávali agenti s různým
+zadáním. Jediný záměrný rozdíl zůstal: n8n má navíc zákaz markdownu, protože
+odpověď čte i Telegram.
+
 > **Poznámka k datům.** Dataset se během práce rozšířil ze šesti měsíců na
 > leden 2025 až dnešek. Naměřená tabulka níž je z aktuálních dat; **citace toho,
 > co model tehdy odpověděl, se nepřepisují** — jsou to záznamy pozorování, ne
@@ -13,16 +21,21 @@ proto se nástroje vystavily jako jedno HTTP API, viz [architektura.md](architek
 
 Osm dotazů z benchmarkové sady HW1, spouští je `scripts/compare_platforms.py`.
 Očekávané hodnoty se počítají z téhož API, ne z opsaných konstant, takže měření
-nezestárne s přegenerováním dat.
+nezestárne s přegenerováním dat. **Tři běhy na platformu** — jeden průchod
+u téhle úlohy nestačí, protože jeden z dotazů kolísá (viz níž).
 
 | | n8n | LangFlow |
 |---|---|---|
-| správně | **8/8** | **8/8** |
-| celkem | 103,5 s | 109,8 s |
-| medián na dotaz | 12,7 s | 15,4 s |
-| nejrychlejší / nejpomalejší | 10,1 / 16,7 s | 9,3 / 18,3 s |
+| skóre ve třech bězích | **8, 8, 8** | 7, 8, 8 |
+| celkem na běh | 103,8 / 100,6 / 100,6 s | 94,6 / 87,2 / 93,6 s |
+| medián na dotaz | 12,4 s | **10,3 s** |
+| padlo aspoň jednou | — | `ukonceny` |
 
-Rychlostně jsou nerozeznatelné — obě čekají na tentýž model. Rozdíl je jinde.
+Rychlostně jsou nerozeznatelné — obě čekají na tentýž model. Ten jeden rozdíl
+ve skóre je past popsaná hned níž a **není to vlastnost platformy**: v HW3 na
+tentýž dotaz padají všichni tři frameworkoví klienti a to, kdo zrovna, se mezi
+sadami běhů obrací (viz [HW3/docs/srovnani.md](../../HW3/docs/srovnani.md)).
+Rozdíl je jinde než ve skóre.
 
 ### Past, která je v datech, ne v platformě
 

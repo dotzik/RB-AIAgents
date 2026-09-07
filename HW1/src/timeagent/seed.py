@@ -58,7 +58,7 @@ def seed_database(
     conn: sqlite3.Connection,
     *,
     anchor: date | None = None,
-    months: int = 6,
+    months: int = 21,
     rng_seed: int = 42,
 ) -> dict[str, int]:
     """Naplní databázi demo daty za `months` měsíců zpět od `anchor` (dnešek).

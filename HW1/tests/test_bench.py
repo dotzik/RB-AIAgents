@@ -25,6 +25,27 @@ def test_mentions_rejects_other_numbers():
     assert not bench._mentions("Naúčtoval jsi 12 345 Kč.", 93000.0)
 
 
+def test_mentions_rejects_substring_matches():
+    """Správné číslo uvnitř jiného čísla není správná odpověď.
+
+    Bez hranic číslic tyhle případy metrikou projdou — ověřeno na reálných
+    odpovědích: „1143 hodin" místo 143, „24 projektů" místo 4.
+    """
+    assert not bench._mentions("Odpracoval jsi 1143 hodin.", 143.0)
+    assert not bench._mentions("Aktivních projektů je 24.", 4.0)
+    assert not bench._mentions("Sazba je 21800 Kč/h.", 1800.0)
+    assert not bench._mentions("Bylo to 132.55 hodin.", 32.5)
+    assert not bench._mentions("NWND, 150.5 hodin.", 50.5)
+
+
+def test_mentions_still_accepts_number_at_boundaries():
+    """Hranice nesmí zabít legitimní formáty."""
+    assert bench._mentions("Odpracoval jsi 143 hodin.", 143.0)
+    assert bench._mentions("(143)", 143.0)
+    assert bench._mentions("143,00 h", 143.0)
+    assert bench._mentions("celkem 143.", 143.0)
+
+
 def test_mentions_handles_decimals():
     assert bench._mentions("Odpracoval jsi 179,5 hodiny.", 179.5)
     assert bench._mentions("Odpracoval jsi 179.5 hodiny.", 179.5)

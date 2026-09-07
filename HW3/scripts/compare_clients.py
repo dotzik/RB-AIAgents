@@ -1,12 +1,16 @@
-"""Projede stejnou sadu dotazů oběma klienty HW3 a porovná je s pravdou.
+"""Projede stejnou sadu dotazů klienty HW3 a porovná je s pravdou.
 
-    python scripts/compare_clients.py
-    python scripts/compare_clients.py --only python
+    python scripts/compare_clients.py --repeat 3
+    python scripts/compare_clients.py --only langgraph
     python scripts/compare_clients.py --json vysledky.json
 
 Sada dotazů a hodnocení se importují z `HW2/scripts/compare_platforms.py`,
 aby čísla zůstala srovnatelná s HW2. Očekávané hodnoty se počítají
 z `timeagent.tools`, ne z konstant — měření nezestárne s novým datasetem.
+
+Běhy se opakují ze stejného důvodu, jaký popisuje HW1/docs/mereni.md: odpověď,
+která visí na hraně, se mezi běhy překlápí i při temperature 0. Jeden průchod
+by z toho udělal vlastnost klienta.
 """
 from __future__ import annotations
 
@@ -21,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "HW1" / "src"))
 sys.path.insert(0, str(ROOT / "HW2" / "scripts"))
 
+# Sada dotazů a hodnocení z HW2 — viz docstring; HW2 se nemění.
 from compare_platforms import CASES, check
 from timeagent import tools
 
@@ -101,6 +106,36 @@ def ask(client: str, question: str) -> dict:
     return payload
 
 
+def run_once(client: str, t: dict) -> list[dict]:
+    rows = []
+    for case in CASES:
+        started = time.perf_counter()
+        try:
+            out = ask(client, case["question"])
+            answer = out["answer"]
+            ok, note = check(case, answer, t)
+            calls = out.get("tool_calls", [])
+        except Exception as exc:  # noqa: BLE001 — selhání klienta je taky výsledek
+            answer, ok, note, calls = "", False, f"selhalo: {exc}", []
+        rows.append(
+            {
+                "id": case["id"],
+                "ok": ok,
+                "note": note,
+                "seconds": round(time.perf_counter() - started, 1),
+                "tool_call_count": len(calls),
+                # Trasa volání, ne jen jejich počet: bez ní se pád nedá po týdnu
+                # vysvětlit a diagnóza v dokumentaci není doložitelná.
+                "tool_calls": calls,
+                "answer": answer,
+            }
+        )
+        stav = "OK   " if ok else "CHYBA"
+        print(f"  {stav} {case['id']:<10} {rows[-1]['seconds']:>6}s  "
+              f"{len(calls)} volání  {note}")
+    return rows
+
+
 def main() -> int:
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
@@ -108,6 +143,7 @@ def main() -> int:
 
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--only", choices=sorted(CLIENTS))
+    ap.add_argument("--repeat", type=int, default=3, help="kolik běhů na klienta")
     ap.add_argument("--json", type=Path, help="uložit surové výsledky")
     args = ap.parse_args()
 
@@ -119,45 +155,36 @@ def main() -> int:
         )
 
     chosen = [args.only] if args.only else list(CLIENTS)
-    results: dict = {"truth": t, "runs": {}}
+    results: dict = {"truth": t, "repeat": args.repeat, "runs": {}}
 
     for client in chosen:
-        print(f"\n=== {client} ({LABELS[client]}) ===")
-        rows = []
-        for case in CASES:
-            started = time.perf_counter()
-            try:
-                out = ask(client, case["question"])
-                answer = out["answer"]
-                ok, note = check(case, answer, t)
-                calls = out.get("tool_call_count", 0)
-            except Exception as exc:  # noqa: BLE001 — selhání klienta je taky výsledek
-                answer, ok, note, calls = "", False, f"selhalo: {exc}", 0
-            secs = round(time.perf_counter() - started, 1)
-            rows.append(
-                {
-                    "id": case["id"],
-                    "ok": ok,
-                    "note": note,
-                    "seconds": secs,
-                    "tool_calls": calls,
-                    "answer": answer,
-                }
-            )
-            stav = "OK   " if ok else "CHYBA"
-            print(f"  {stav} {case['id']:<10} {secs:>6}s  {calls} volání  {note}")
-        passed = sum(r["ok"] for r in rows)
-        total = round(sum(r["seconds"] for r in rows), 1)
-        times = sorted(r["seconds"] for r in rows)
-        median = times[len(times) // 2]
-        print(f"  --- {passed}/{len(rows)} správně, {total} s celkem, medián {median} s")
+        runs = []
+        for n in range(args.repeat):
+            print(f"\n=== {client} ({LABELS[client]}) — běh {n + 1}/{args.repeat} ===")
+            rows = run_once(client, t)
+            passed = sum(r["ok"] for r in rows)
+            total = round(sum(r["seconds"] for r in rows), 1)
+            print(f"  --- {passed}/{len(rows)} správně, {total} s")
+            runs.append({"rows": rows, "passed": passed, "seconds": total})
+
+        scores = [r["passed"] for r in runs]
+        times = sorted(s for r in runs for s in (x["seconds"] for x in r["rows"]))
+        # Které případy padly aspoň jednou — to je jediné, co jde z pár běhů
+        # poctivě tvrdit. Skóre jednoho běhu je u hraničních dotazů hod mincí.
+        flaky = sorted({row["id"] for r in runs for row in r["rows"] if not row["ok"]})
         results["runs"][client] = {
             "label": LABELS[client],
-            "rows": rows,
-            "passed": passed,
-            "seconds": total,
-            "median": median,
+            "runs": runs,
+            "scores": scores,
+            "best": max(scores),
+            "worst": min(scores),
+            "median_seconds": times[len(times) // 2],
+            "failed_at_least_once": flaky,
         }
+        print(f"\n  === {LABELS[client]}: {scores} z {len(CASES)}, "
+              f"medián {times[len(times) // 2]} s")
+        if flaky:
+            print(f"      aspoň jednou padlo: {', '.join(flaky)}")
 
     if args.json:
         args.json.write_text(

@@ -1,5 +1,12 @@
 # timeagent
 
+> **Co plní zadání.** Zadání HW1 zní „skript, který zavolá LLM API, použije
+> nástroj a vrátí odpověď zpět LLM". To je smyčka v
+> [`src/timeagent/agent.py`](src/timeagent/agent.py) — model požádá o nástroj,
+> výsledek se vrátí do konverzace jako zpráva role `tool` a jde do dalšího kola.
+> Nástroje jsou v [`tools.py`](src/timeagent/tools.py). Všechno ostatní (CLI,
+> generátor dat, import z Clockify, benchmark) je kolem toho.
+
 Agent nad databází výkazů odpracovaného času. Odpovídá na dotazy typu „kolik jsem
 v srpnu naúčtoval Acme" tak, že si potřebné údaje vytáhne nástroji ze SQLite
 a teprve z nich sestaví odpověď.

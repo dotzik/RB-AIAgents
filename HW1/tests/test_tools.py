@@ -270,3 +270,21 @@ def test_invoice_for_month_without_entries_has_note(demo_db):
     assert out["billable_hours"] == 0
     assert out["amount_excl_vat"] == 0
     assert "note" in out
+
+
+def test_summarize_by_omezi_pocet_skupin(demo_db):
+    """Rozpad po dnech za dva roky nesmí zaplnit kontextové okno."""
+    vysledek = tools.summarize_by("day", "2020-01-01", "2030-12-31")
+
+    assert vysledek["group_count"] > tools.MAX_GROUPS
+    assert len(vysledek["groups"]) == tools.MAX_GROUPS
+    assert "note" in vysledek
+    # Součet se počítá ze všech skupin, ne jen z vypsaných.
+    assert vysledek["total_hours"] > sum(g["hours"] for g in vysledek["groups"])
+
+
+def test_summarize_by_bez_orezu_nema_note(demo_db):
+    vysledek = tools.summarize_by("project", "2020-01-01", "2030-12-31")
+
+    assert vysledek["group_count"] == len(vysledek["groups"])
+    assert "note" not in vysledek

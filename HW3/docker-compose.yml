@@ -54,7 +54,8 @@ services:
       hw2:
         aliases: [mcp-dotnet]
     healthcheck:
-      test: ["CMD", "sh", "-c", "wget -qO- http://localhost:8000/health || exit 1"]
+      # V aspnet image není wget ani curl; dotnet tam ale je z definice.
+      test: ["CMD", "dotnet", "TimeAgent.Mcp.dll", "--healthcheck"]
       interval: 20s
       timeout: 5s
       retries: 5

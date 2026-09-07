@@ -7,9 +7,25 @@
 using ModelContextProtocol.Protocol;
 using TimeAgent.Mcp;
 
-var builder = WebApplication.CreateBuilder(args);
+var apiBase = Environment.GetEnvironmentVariable("TOOLS_BASE_URL") ?? "http://127.0.0.1:8000";
 
-var apiBase = builder.Configuration["TOOLS_BASE_URL"] ?? "http://127.0.0.1:8000";
+// Healthcheck kontejneru. V aspnet image není wget ani curl, takže si o zdraví
+// řekne sám server: `dotnet TimeAgent.Mcp.dll --healthcheck` vrátí 0 nebo 1.
+if (args.Contains("--healthcheck"))
+{
+    using var probe = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+    try
+    {
+        var response = await probe.GetAsync("http://localhost:8000/health");
+        return response.IsSuccessStatusCode ? 0 : 1;
+    }
+    catch
+    {
+        return 1;
+    }
+}
+
+var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddHttpClient<ToolCatalog>(client =>
 {
@@ -66,6 +82,7 @@ app.MapGet("/health", async (ToolCatalog catalog, CancellationToken ct) =>
 app.MapMcp("/mcp");
 
 app.Run();
+return 0;
 
 // Kvůli WebApplicationFactory v testech.
 public partial class Program;

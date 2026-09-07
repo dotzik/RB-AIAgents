@@ -73,7 +73,7 @@
         "promptType": "define",
         "text": "={{ $json.text }}",
         "options": {
-          "systemMessage": "Jsi asistent pro analýzu výkazů odpracovaného času. Odpovídáš česky, stručně a věcně.\n\nPravidla:\n- Čísla nikdy neodhaduj ani nepočítej zpaměti — vždy je zjisti nástrojem.\n- Když neznáš přesný název projektu, nejdřív si vypiš projekty nástrojem list_projects.\n- Data zadávej v ISO formátu (YYYY-MM-DD), měsíce jako YYYY-MM.\n- Složitější dotaz rozlož na víc volání nástrojů za sebou (např. porovnání dvou období\n  = dvě volání) a teprve pak odpověz.\n- Posílej přesně ta pole, která má nástroj v popisu — žádná navíc.\n- Nevolej dvakrát tentýž nástroj se stejnými argumenty; výsledek už máš výš.\n- Když nástroj vrátí pole \"error\", oprav argumenty a zkus to znovu.\n- Chybovou hlášku z nástroje nikdy nepiš do odpovědi jako výsledek.\n- Uveď jen čísla, která ti v této odpovědi vrátil nástroj. Nikdy nepokračuj\n  v trendu, neodhaduj podle jiných měsíců a nepřebírej čísla z dřívější\n  konverzace — ta mohou být chybná.\n- Když nástroj vrátí nulu, prázdný seznam nebo pole \"note\", řekni rovnou, že\n  za dané období nejsou záznamy, a uveď rozsah dostupných dat z \"note\".\n- V odpovědi uveď konkrétní čísla, u peněz i měnu.\n- Odpovídej prostým textem bez markdownu — čte se to i v Telegramu.\n\nDnešní datum je 2026-09-06 (neděle). Aktuální měsíc je 2026-09."
+          "systemMessage": "Jsi asistent pro analýzu výkazů odpracovaného času. Odpovídáš česky, stručně a věcně.\n\nPravidla:\n- Čísla nikdy neodhaduj ani nepočítej zpaměti — vždy je zjisti nástrojem.\n- Když neznáš přesný název projektu, nejdřív si vypiš projekty nástrojem list_projects.\n- Data zadávej v ISO formátu (YYYY-MM-DD), měsíce jako YYYY-MM.\n- Složitější dotaz rozlož na víc volání nástrojů za sebou (např. porovnání dvou období\n  = dvě volání) a teprve pak odpověz.\n- Nepovinný parametr prostě vynech — neposílej \"null\" ani prázdný řetězec.\n- Nevolej dvakrát tentýž nástroj se stejnými argumenty; výsledek už máš výš.\n- Když nástroj vrátí pole \"error\", oprav argumenty a zkus to znovu.\n- Chybovou hlášku z nástroje nikdy nepiš do odpovědi jako výsledek.\n- Uveď jen čísla, která ti v této odpovědi vrátil nástroj. Nikdy nepokračuj\n  v trendu, neodhaduj podle jiných měsíců a nepřebírej čísla z dřívější\n  konverzace — ta mohou být chybná.\n- Když nástroj vrátí nulu, prázdný seznam nebo pole \"note\", řekni rovnou, že\n  za dané období nejsou záznamy, a uveď rozsah dostupných dat z \"note\".\n- V odpovědi uveď konkrétní čísla, u peněz i měnu.\n\nDnešní datum je 2026-09-07 (pondělí). Aktuální měsíc je 2026-09.\n\nOdpovídej prostým textem bez markdownu — čte se to i v Telegramu."
         }
       }
     },
@@ -87,7 +87,7 @@
         300
       ],
       "parameters": {
-        "model": "qwen2.5:32b",
+        "model": "qwen2.5:14b",
         "options": {
           "numCtx": 32768,
           "temperature": 0
@@ -95,7 +95,7 @@
       },
       "credentials": {
         "ollamaApi": {
-          "id": "ZsJ0Hdopgu6VERgO",
+          "id": "",
           "name": "Ollama — DGX Spark"
         }
       }
@@ -126,197 +126,6 @@
       "parameters": {
         "jsCode": "// Pojistka proti nedoloženým číslům.\n//\n// Jestli agent zavolá nástroj, je rozhodnutí modelu — nic ho k tomu nenutí.\n// qwen2.5:14b ho občas přeskočí a odpověď si domyslí; pozorováno na dotazu za\n// červen, kde vydal 167,5 h a rozpad po projektech, aniž by se API dotkl\n// (pravda je 166,0 h). Prompt na to nestačí, protože pravidlo čte tentýž model,\n// který ho porušuje.\n//\n// Tenhle uzel proto nekontroluje model, ale **běh**: podívá se, které tool uzly\n// se v tomto běhu opravdu spustily. Volání tím nevynutí — zaručí ale, že se\n// nedoložené číslo nedostane k uživateli.\n//\n// Odpověď bez čísel (pozdrav, upřesňující otázka) nástroj nepotřebuje, takže se\n// kontrola uplatní jen tam, kde odpověď něco číselně tvrdí.\n\nconst TOOLS = [\"list_projects\", \"query_time_entries\", \"summarize_by\", \"compute_invoice\", \"capacity_check\"];\n\nconst used = [];\nfor (const name of TOOLS) {\n  try {\n    if ($(name).isExecuted) used.push(name);\n  } catch (e) {\n    // Uzel se v tomto běhu vůbec neobjevil — to je legitimní stav, ne chyba.\n  }\n}\n\nconst answer = $json.output ?? '';\nconst claimsNumbers = /\\d/.test(answer);\n\nif (claimsNumbers && used.length === 0) {\n  return [{\n    json: {\n      output:\n        'Tuhle odpověď neumím doložit — nepodařilo se mi získat data z databáze ' +\n        'výkazů, takže bych ti musel čísla odhadnout. Zkus se zeptat znovu, ' +\n        'případně upřesni období.',\n      verified: false,\n      toolsUsed: [],\n    },\n  }];\n}\n\nreturn [{\n  json: {\n    // Zdroj se připojuje z běhu, ne z tvrzení modelu. Na otázku „odkud to máš\"\n    // odpovídá model jen dojmem; tohle je fakt.\n    output: used.length ? `${answer}\\n\\n[zdroj: ${used.join(', ')}]` : answer,\n    verified: true,\n    toolsUsed: used,\n  },\n}];\n"
       }
-    },
-    {
-      "id": "schedule",
-      "name": "Každých pár vteřin",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.4,
-      "position": [
-        -880,
-        200
-      ],
-      "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "field": "seconds",
-              "secondsInterval": 5
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "read-offset",
-      "name": "Načti offset",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -680,
-        200
-      ],
-      "parameters": {
-        "jsCode": "// Odkud číst. Telegram posílá tytéž zprávy dokola, dokud nepotvrdíme přečtení\n// tím, že příště pošleme vyšší offset. Drží se ve statických datech workflow,\n// takže přežije mezi běhy.\nconst store = $getWorkflowStaticData('global');\nreturn [{ json: { offset: store.offset ?? 0 } }];\n"
-      }
-    },
-    {
-      "id": "get-updates",
-      "name": "Telegram getUpdates",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.5,
-      "position": [
-        -480,
-        200
-      ],
-      "parameters": {
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/getUpdates",
-        "sendQuery": true,
-        "specifyQuery": "keypair",
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "offset",
-              "value": "={{ $json.offset }}"
-            },
-            {
-              "name": "timeout",
-              "value": "0"
-            },
-            {
-              "name": "allowed_updates",
-              "value": "[\"message\"]"
-            }
-          ]
-        },
-        "options": {}
-      }
-    },
-    {
-      "id": "compute-offset",
-      "name": "Spočti nový offset",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -320,
-        200
-      ],
-      "parameters": {
-        "jsCode": "// Spočítá, kam se posunout, a vrátí JEDNU položku — potvrzení přečtení se pak\n// zavolá jen jednou, ne pro každou zprávu zvlášť.\n//\n// Offset se posouvá i u aktualizací, které nezpracujeme (editace, fotky) —\n// jinak by se polling na takové zprávě zasekl a četl ji donekonečna.\nconst store = $getWorkflowStaticData('global');\nconst updates = $input.first().json.result ?? [];\n\nlet maxId = store.offset ? store.offset - 1 : 0;\nfor (const u of updates) {\n  if (u.update_id > maxId) maxId = u.update_id;\n}\n\nconst newOffset = maxId + 1;\nstore.offset = newOffset;      // jen záloha pro případ restartu n8n\nreturn [{ json: { newOffset, updates } }];\n"
-      }
-    },
-    {
-      "id": "ack",
-      "name": "Potvrď přečtení",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.5,
-      "position": [
-        -160,
-        200
-      ],
-      "parameters": {
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/getUpdates",
-        "sendQuery": true,
-        "specifyQuery": "keypair",
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "offset",
-              "value": "={{ $json.newOffset }}"
-            },
-            {
-              "name": "timeout",
-              "value": "0"
-            },
-            {
-              "name": "limit",
-              "value": "1"
-            }
-          ]
-        },
-        "options": {}
-      }
-    },
-    {
-      "id": "unpack",
-      "name": "Rozbal zprávy",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        0,
-        200
-      ],
-      "parameters": {
-        "jsCode": "// Teprve teď, po potvrzení přečtení, se z aktualizací udělá jedna položka\n// na zprávu. Data se berou z uzlu před potvrzením — odpověď potvrzovacího\n// volání nás nezajímá.\nconst updates = $('Spočti nový offset').first().json.updates ?? [];\nconst out = [];\n\nfor (const u of updates) {\n  const msg = u.message;\n  if (!msg?.text) continue;    // fotky, samolepky a spol. ignorujeme\n  out.push({ json: { text: msg.text, chatId: msg.chat.id } });\n}\n\nreturn out;                    // prázdné pole = běh tiše skončí, agent se nespustí\n"
-      }
-    },
-    {
-      "id": "is-telegram",
-      "name": "Z Telegramu?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        420,
-        40
-      ],
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "from-telegram",
-              "leftValue": "={{ $('Sjednoť vstup').item.json.channel }}",
-              "rightValue": "telegram",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      }
-    },
-    {
-      "id": "send",
-      "name": "Odpověz do Telegramu",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        640,
-        -40
-      ],
-      "parameters": {
-        "chatId": "={{ $('Sjednoť vstup').item.json.chatId }}",
-        "text": "={{ $json.output.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;') }}",
-        "additionalFields": {
-          "appendAttribution": false,
-          "parse_mode": "HTML"
-        }
-      },
-      "credentials": {
-        "telegramApi": {
-          "id": "odmXAhEjFSUfQn3p",
-          "name": "Telegram — TimeAgent bot"
-        }
-      }
-    },
-    {
-      "id": "chat-end",
-      "name": "Konec (odpověď do chatu)",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [
-        640,
-        120
-      ],
-      "parameters": {}
     },
     {
       "id": "tool-list_projects",
@@ -534,101 +343,6 @@
           {
             "node": "Agent nad výkazy",
             "type": "ai_memory",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Každých pár vteřin": {
-      "main": [
-        [
-          {
-            "node": "Načti offset",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Načti offset": {
-      "main": [
-        [
-          {
-            "node": "Telegram getUpdates",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Telegram getUpdates": {
-      "main": [
-        [
-          {
-            "node": "Spočti nový offset",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Spočti nový offset": {
-      "main": [
-        [
-          {
-            "node": "Potvrď přečtení",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Potvrď přečtení": {
-      "main": [
-        [
-          {
-            "node": "Rozbal zprávy",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Rozbal zprávy": {
-      "main": [
-        [
-          {
-            "node": "Sjednoť vstup",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Ověř zdroj": {
-      "main": [
-        [
-          {
-            "node": "Z Telegramu?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Z Telegramu?": {
-      "main": [
-        [
-          {
-            "node": "Odpověz do Telegramu",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Konec (odpověď do chatu)",
-            "type": "main",
             "index": 0
           }
         ]

@@ -217,6 +217,34 @@ ptá jen na částku, takže odpověď „112 530 Kč" byla věcně správná a 
 Totéž u dotazu „který den jsem odpracoval nejvíc hodin" — vyžadoval jsem datum
 i počet hodin, přestože otázka chce jen ten den.
 
+### Metrika propouštěla čísla, která obsahovala to správné
+
+Nalezeno až při nezávislé prověrce, tedy **po** naměření tabulek níž.
+`_mentions_number` hledala číslo jako podřetězec, bez hranic číslic. Prošlo
+tím cokoli, co správné číslo obsahovalo:
+
+| Odpověď modelu | Očekáváno | Metrika |
+|---|---|---|
+| „Aktivních projektů je **24**." | 4 | prošlo |
+| „…odpracoval **1143** hodin." | 143 | prošlo |
+| „…bylo **132.55** hodin." | 32.5 | prošlo |
+| „…sazbu **21800** Kč/h." | 1800 | prošlo |
+
+Je to přesně ta „metrika propouštějící cokoli", před kterou varuje bod 3 níž —
+a negativní kontrola k ní existovala, jen testovala zjevně jiné číslo
+(`12 345` proti `93 000`), ne případ „obsahuje to správné jako podřetězec".
+Testovalo se, co se snadno testuje.
+
+Opraveno: hledání je na hranicích číslic (`(?<!\d)…(?!\d)(?!\.\d)`) a
+`test_mentions_rejects_substring_matches` drží všechny čtyři případy výše.
+
+**Co to znamená pro čísla v tabulkách níž.** Vznikla starou metrikou, která
+mohla jen nadhodnocovat — jsou to tedy **horní odhady**, ne potvrzené hodnoty.
+Přeskórovat je nejde: syrové odpovědi z těch běhů se neukládaly do repozitáře,
+takže `bench --rescore` nemá na čem pracovat. To je druhá polovina poučení:
+**měření, které si nenechá odpovědi, se nedá revidovat, když se najde vada
+v metrice.** Od téhle chvíle patří výstup `bench --json` do repozitáře.
+
 ### Kontrola měřila databázový zápis, ne odpověď
 
 Nejzajímavější případ. Očekávané hodnoty se braly z databáze tak, jak tam jsou:
@@ -339,13 +367,15 @@ Zjištění, o kterých se moc nepíše, a jejich praktické důsledky shrnuje
 
 ## Náklady
 
-Jeden běh benchmarku přes Anthropic API, tři dotazy:
+Zkrácená sada **tří dotazů, jeden běh** — ne celý benchmark. Plný běh
+v tabulce výsledků je 13 dotazů × 3 opakování, tedy zhruba **čtrnáctkrát víc**
+(u Haiku 215 898 tokenů místo 15 222).
 
-| Model | Tokeny | Přibližná cena |
-|---|---|---|
-| Haiku 4.5 | 15 222 | ~2 centy |
-| Sonnet 5 | 16 905 | ~4 centy |
-| Opus 5 | 16 379 | ~9 centů |
+| Model | Tokeny (3 dotazy) | Cena (3 dotazy) | Cena plného běhu, odhad |
+|---|---|---|---|
+| Haiku 4.5 | 15 222 | ~2 centy | ~30 centů |
+| Sonnet 5 | 16 905 | ~4 centy | ~55 centů |
+| Opus 5 | 16 379 | ~9 centů | ~1,3 $ |
 
 Lokální běhy stojí jen čas.
 

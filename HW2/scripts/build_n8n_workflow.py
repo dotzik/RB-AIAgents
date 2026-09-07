@@ -29,6 +29,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
+sys.path.insert(0, str(ROOT.parent / "HW1" / "src"))
+
+from timeagent.agent import build_system_prompt
+
 OUT = ROOT / "flows" / "n8n" / "vykazy-agent.json"
 
 # Z hostitele se testuje přes localhost, uvnitř sítě projektu se služby vidí
@@ -42,36 +46,6 @@ POLL_SECONDS = 5
 
 # Zvyš, když je potřeba zahodit historii konverzací (viz uzel Paměť konverzace).
 MEMORY_EPOCH = "v2"
-
-# Systémový prompt je převzatý z HW1 (`src/timeagent/agent.py`). Každé pravidlo
-# v něm vzniklo z pozorovaného selhání, ne z teorie — proto se nepřepisuje.
-# Dnešní datum se dosazuje při generování: bez něj model nepřeloží „minulý měsíc",
-# protože v trénovacích datech dnešek není.
-SYSTEM_PROMPT = """\
-Jsi asistent pro analýzu výkazů odpracovaného času. Odpovídáš česky, stručně a věcně.
-
-Pravidla:
-- Čísla nikdy neodhaduj ani nepočítej zpaměti — vždy je zjisti nástrojem.
-- Když neznáš přesný název projektu, nejdřív si vypiš projekty nástrojem list_projects.
-- Data zadávej v ISO formátu (YYYY-MM-DD), měsíce jako YYYY-MM.
-- Složitější dotaz rozlož na víc volání nástrojů za sebou (např. porovnání dvou období
-  = dvě volání) a teprve pak odpověz.
-- Posílej přesně ta pole, která má nástroj v popisu — žádná navíc.
-- Nevolej dvakrát tentýž nástroj se stejnými argumenty; výsledek už máš výš.
-- Když nástroj vrátí pole "error", oprav argumenty a zkus to znovu.
-- Chybovou hlášku z nástroje nikdy nepiš do odpovědi jako výsledek.
-- Uveď jen čísla, která ti v této odpovědi vrátil nástroj. Nikdy nepokračuj
-  v trendu, neodhaduj podle jiných měsíců a nepřebírej čísla z dřívější
-  konverzace — ta mohou být chybná.
-- Když nástroj vrátí nulu, prázdný seznam nebo pole "note", řekni rovnou, že
-  za dané období nejsou záznamy, a uveď rozsah dostupných dat z "note".
-- V odpovědi uveď konkrétní čísla, u peněz i měnu.
-- Odpovídej prostým textem bez markdownu — čte se to i v Telegramu.
-
-Dnešní datum je {today} ({weekday}). Aktuální měsíc je {month}.\
-"""
-
-_WEEKDAYS = ["pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota", "neděle"]
 
 READ_OFFSET = """\
 // Odkud číst. Telegram posílá tytéž zprávy dokola, dokud nepotvrdíme přečtení
@@ -172,9 +146,14 @@ return [{
 
 
 def system_prompt(today: date | None = None) -> str:
-    d = today or date.today()
-    return SYSTEM_PROMPT.format(
-        today=d.isoformat(), weekday=_WEEKDAYS[d.weekday()], month=d.strftime("%Y-%m")
+    """Prompt z HW1 plus jedno pravidlo navíc.
+
+    Importuje se, neopisuje: tři kopie se dřív rozešly a srovnání platforem
+    pak porovnávalo agenty s různým zadáním. Markdown se zakazuje jen tady —
+    odpověď se čte i v Telegramu, který ho nerenderuje.
+    """
+    return build_system_prompt(today or date.today()).rstrip() + (
+        "\n\nOdpovídej prostým textem bez markdownu — čte se to i v Telegramu."
     )
 
 
@@ -638,7 +617,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--only", nargs="*", help="jen vyjmenované nástroje")
     ap.add_argument("--model", default=os.environ.get("OLLAMA_MODEL", "qwen2.5:14b"))
-    ap.add_argument("--credential-id", default=os.environ.get("N8N_OLLAMA_CREDENTIAL_ID", ""))
+    # Bez ID se zapíše zástupná hodnota — identifikátor konkrétní instance
+    # do odevzdávaného JSONu nepatří; po importu se credential vybere v UI.
+    ap.add_argument("--credential-id",
+                    default=os.environ.get("N8N_OLLAMA_CREDENTIAL_ID", "OLLAMA-CREDENTIAL-ID"))
     ap.add_argument("--telegram-credential-id",
                     default=os.environ.get("N8N_TELEGRAM_CREDENTIAL_ID", ""))
     ap.add_argument("--no-telegram", action="store_true", help="jen chat, bez Telegramu")

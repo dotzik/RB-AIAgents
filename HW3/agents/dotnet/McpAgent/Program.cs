@@ -11,6 +11,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -51,15 +52,26 @@ var asJson = args.Contains("--json");
 
 // Natvrdo, ne AutoDetect — server umí jen Streamable HTTP a autodetekce
 // by při každém běhu zkoušela i SSE.
-await using var mcpClient = await McpClient.CreateAsync(
-    new HttpClientTransport(new HttpClientTransportOptions
-    {
-        Name = "timeagent",
-        Endpoint = new Uri(mcpUrl),
-        TransportMode = HttpTransportMode.StreamableHttp,
-    }));
+McpClient mcpClient;
+IList<McpClientTool> tools;
+try
+{
+    mcpClient = await McpClient.CreateAsync(
+        new HttpClientTransport(new HttpClientTransportOptions
+        {
+            Name = "timeagent",
+            Endpoint = new Uri(mcpUrl),
+            TransportMode = HttpTransportMode.StreamableHttp,
+        }));
+    tools = await mcpClient.ListToolsAsync();
+}
+catch (Exception exc)
+{
+    return Fail($"MCP server na {mcpUrl} neodpovídá ({exc.GetType().Name}). "
+                + "Běží? `cd HW3 && docker compose up -d`", asJson, jsonOpts);
+}
 
-var tools = await mcpClient.ListToolsAsync();
+await using var _ = mcpClient;
 
 if (cmd == "tools")
 {
@@ -99,12 +111,9 @@ try
 }
 catch (Exception exc)
 {
-    var message = $"{exc.GetType().Name}: {exc.Message}";
-    if (asJson)
-        Console.WriteLine(JsonSerializer.Serialize(new { error = message }, jsonOpts));
-    else
-        Console.Error.WriteLine("Chyba: " + message);
-    return 1;
+    return Fail($"Model na {ollamaUrl} neodpověděl ({exc.GetType().Name}: {exc.Message}). "
+                + "Zkontroluj OLLAMA_BASE_URL a OLLAMA_MODEL v HW3/.env "
+                + "a že Ollama běží.", asJson, jsonOpts);
 }
 stopwatch.Stop();
 
@@ -160,6 +169,17 @@ static void LoadDotEnv()
     }
 }
 
+// Selhání závislosti musí být poznat i ze skriptu: jedna věta s nápovědou
+// a nenulový návratový kód, ne stack trace. Vzor je HW1/src/timeagent/llm.py.
+static int Fail(string message, bool asJson, JsonSerializerOptions opts)
+{
+    if (asJson)
+        Console.WriteLine(JsonSerializer.Serialize(new { error = message }, opts));
+    else
+        Console.Error.WriteLine("Chyba: " + message);
+    return 1;
+}
+
 static Dictionary<string, string> ParseOptions(string[] args)
 {
     var result = new Dictionary<string, string>();
@@ -187,4 +207,8 @@ static string BuildSystemPrompt()
         .Replace("{month}", today.ToString("yyyy-MM", CultureInfo.InvariantCulture));
 }
 
-internal record ToolCall(string Name, IDictionary<string, object?>? Arguments);
+// Klíče malými písmeny, aby trasa volání vypadala stejně jako u Python
+// klientů — jinak se výsledky tří klientů nedají číst jedním skriptem.
+internal record ToolCall(
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("arguments")] IDictionary<string, object?>? Arguments);

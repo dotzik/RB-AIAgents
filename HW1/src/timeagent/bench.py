@@ -104,9 +104,19 @@ def _hourly_rate() -> list[Skupina]:
 
 
 def _top_client() -> list[Skupina]:
+    """Klient s nejvíc hodinami — jméno i identifikátor projdou.
+
+    Obojí se dopočítá z databáze. Dřív tu bylo natvrdo "NWND" jako rovnocenná
+    varianta; po přegenerování dat by tím prošla odpověď se špatným klientem.
+    """
     first, last = _range(_bench_month())
     top = tools.summarize_by("client", first, last)["groups"][0]
-    return [[top["bucket"], "NWND"], [top["hours"]]]
+    ids = {
+        p["id"]
+        for p in tools.list_projects()["projects"]
+        if p["client"] == top["bucket"]
+    }
+    return [[top["bucket"], *sorted(ids)], [top["hours"]]]
 
 
 # Jak se tag jmenuje v běžné češtině. V databázi je bez diakritiky, protože
@@ -176,8 +186,23 @@ def _compare_months() -> list[Skupina]:
 
 
 def _finished_project() -> list[Skupina]:
-    """Projekt, na kterém se poslední měsíce nedělalo. Zkratka i jméno projdou."""
-    return [["INIT", "Initech"]]
+    """Projekt, na kterém se v měřeném měsíci nedělalo. Zkratka i jméno projdou.
+
+    Dopočítá se z databáze, ne konstantou: po přegenerování dat může být
+    nečinný jiný projekt a natvrdo zapsaná dvojice by měřila něco jiného.
+    """
+    first, last = _range(_bench_month())
+    aktivni = {
+        g["bucket"] for g in tools.summarize_by("project", first, last)["groups"]
+    }
+    necinne = [p for p in tools.list_projects()["projects"] if p["id"] not in aktivni]
+    if not necinne:
+        raise RuntimeError(
+            "Všechny projekty mají v měřeném měsíci hodiny — dotaz na ukončený "
+            "projekt nemá co měřit. Přegeneruj data `timeagent seed`."
+        )
+    projekt = necinne[0]
+    return [[projekt["id"], projekt["name"]]]
 
 
 def _chained_invoice() -> list[Skupina]:
@@ -329,10 +354,18 @@ _NUMBER_NOISE = re.compile(r"[\s  ]")
 
 
 def _mentions_number(answer: str, value: float) -> bool:
-    """Je číslo v odpovědi? Tolerantně k formátování i zaokrouhlení."""
+    """Je číslo v odpovědi? Tolerantně k formátování i zaokrouhlení.
+
+    Hledá se na hranicích číslic, ne jako podřetězec. Bez toho projde `1143`
+    jako `143` a `24` jako `4` — metrika by pak propustila odpověď, která se
+    liší o řád. Vlevo nesmí předcházet číslice, vpravo nesmí následovat
+    číslice ani desetinná část (`143` se nesmí chytit na `143.75`).
+    """
     haystack = _NUMBER_NOISE.sub("", answer).replace(",", ".")
     candidates = {f"{value:.2f}", f"{value:.1f}", f"{value:g}", f"{round(value):d}"}
-    return any(c in haystack for c in candidates)
+    return any(
+        re.search(rf"(?<!\d){re.escape(c)}(?!\d)(?!\.\d)", haystack) for c in candidates
+    )
 
 
 def _bez_diakritiky(text: str) -> str:

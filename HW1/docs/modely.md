@@ -138,8 +138,9 @@ Klíč se generuje na [console.anthropic.com](https://console.anthropic.com)
 ani Claude Code na ni nepřenáší kredit.
 
 Dostupné modely a ceny za milion tokenů: Haiku 4.5 ($1/$5), Sonnet 5 ($2/$10),
-Opus 5 ($5/$25). Jeden běh benchmarku (tři dotazy) vyjde podle modelu na
-2 až 10 centů.
+Opus 5 ($5/$25). Zkrácená sada tří dotazů vyjde podle modelu na 2 až 10 centů;
+plný běh (13 dotazů × 3 opakování) je zhruba čtrnáctkrát dražší — viz
+[mereni.md](mereni.md#náklady).
 
 **`TIMEAGENT_API_BASE` u cloudových poskytovatelů nenastavuj.** Kód ho pro
 prefixy `anthropic/`, `gemini/`, `openrouter/`, `xai/` a `vertex_ai/` záměrně

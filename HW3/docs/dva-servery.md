@@ -10,7 +10,7 @@ V HW3 jsou nad týmiž nástroji **dva MCP servery**. Není to omyl ani nerozhod
 | vidí databázi | ano (read-only) | **ne** |
 | potřebuje HW1 v image | ano | **ne** |
 | skoků k datům | 1 | 2 |
-| řádků | 159 | 175 (+ 6 testů) |
+| řádků | 129 | 187 (+ 6 testů) |
 
 Cesta k datům:
 
@@ -35,32 +35,28 @@ včetně escapování `%` a `_` ve vzoru, `coerce_arguments`, `_empty_note`
 a s tím i 106 testů z HW1. A hlavně by to rozbilo tvrzení, na kterém stojí
 srovnání v HW2: že všechny platformy volají bit po bitu tentýž kód.
 
-Proxy tenhle problém nemá — a že ho nemá, je **ověřené, ne slíbené**:
-
-```
-schemata shodna : True
-vysledky shodne : True
-```
-
-Oba servery odpověděly na `tools/list` a na tři volání identicky, do posledního
-bajtu. Kontrolu spustíš znovu:
+Proxy tenhle problém nemá — a že ho nemá, je **ověřené, ne slíbené**.
+Kontrolu spouští `scripts/compare_servers.py`: porovná `tools/list` a osm volání
+včetně hraničních (prázdné období s `note`, neexistující projekt, neznámý
+nástroj, narovnání argumentu `"160"` na číslo) a při první odchylce vrátí
+nenulový kód.
 
 ```bash
-cd HW3/mcp && uv run python - <<'PY'
-import anyio, json
-from mcp import Client
-
-async def probe(url):
-    async with Client(url) as c:
-        tools = await c.list_tools()
-        result = await c.call_tool("capacity_check", {"month": "2026-08"})
-        return [t.model_dump() for t in tools.tools], json.loads(result.content[0].text)
-
-async def main():
-    print(await probe("http://127.0.0.1:8010/mcp") == await probe("http://127.0.0.1:8011/mcp"))
-anyio.run(main)
-PY
+cd HW3/mcp && uv run python ../scripts/compare_servers.py
 ```
+
+```
+OK    tools/list — 5 nástrojů shodných
+OK    capacity_check({"month": "2026-08"})
+…
+OK    capacity_check({"month": "2026-08", "target_hours": "160"})
+
+Shodné do posledního bajtu: 8 volání + tools/list.
+```
+
+Dřív tu byl místo skriptu úryvek kódu k ručnímu spuštění. Kód v dokumentaci,
+který nikdo nespustí, zestárne tiše — a tenhle se s vypsaným výstupem už
+rozcházel.
 
 ## Co se na tom dá naučit
 

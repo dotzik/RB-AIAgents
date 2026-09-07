@@ -16,7 +16,6 @@ import json
 import os
 import sys
 import urllib.request
-from datetime import date
 
 sys.path.insert(0, "/app")
 
@@ -35,42 +34,18 @@ OLLAMA_PLACEHOLDER = "http://OLLAMA-HOST:11434"
 
 GZIP_MAGIC = bytes([0x1F, 0x8B])
 
-_WEEKDAYS = ["pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota", "neděle"]
-
-# Kopie promptu z HW1 — uvnitř kontejneru na balíček nedosáhneme.
-# Rozejití hlídá `scripts/export_system_prompt.py --check`.
-# Poslední řádek je navíc: LangFlow renderuje markdown a model jinak dělá tabulky.
-SYSTEM_PROMPT = """\
-Jsi asistent pro analýzu výkazů odpracovaného času. Odpovídáš česky, stručně a věcně.
-
-Pravidla:
-- Čísla nikdy neodhaduj ani nepočítej zpaměti — vždy je zjisti nástrojem.
-- Když neznáš přesný název projektu, nejdřív si vypiš projekty nástrojem list_projects.
-- Data zadávej v ISO formátu (YYYY-MM-DD), měsíce jako YYYY-MM.
-- Složitější dotaz rozlož na víc volání nástrojů za sebou (např. porovnání dvou období
-  = dvě volání) a teprve pak odpověz.
-- Nepovinný parametr prostě vynech — neposílej "null" ani prázdný řetězec.
-- Nevolej dvakrát tentýž nástroj se stejnými argumenty; výsledek už máš výš.
-- Když nástroj vrátí pole "error", oprav argumenty a zkus to znovu.
-- Chybovou hlášku z nástroje nikdy nepiš do odpovědi jako výsledek.
-- Uveď jen čísla, která ti v této odpovědi vrátil nástroj. Nikdy nepokračuj
-  v trendu, neodhaduj podle jiných měsíců a nepřebírej čísla z dřívější
-  konverzace — ta mohou být chybná.
-- Když nástroj vrátí nulu, prázdný seznam nebo pole "note", řekni rovnou, že
-  za dané období nejsou záznamy, a uveď rozsah dostupných dat z "note".
-- V odpovědi uveď konkrétní čísla, u peněz i měnu.
-
-Dnešní datum je {today} ({weekday}). Aktuální měsíc je {month}.
-
-Odpovídej prostým textem bez markdownu.\
-"""
-
-
+# Prompt se předává z hostitele proměnnou SYSTEM_PROMPT — uvnitř kontejneru
+# na balíček z HW1 nedosáhneme a kopie v tomhle souboru se dřív rozešla.
 def system_prompt() -> str:
-    d = date.today()
-    return SYSTEM_PROMPT.format(
-        today=d.isoformat(), weekday=_WEEKDAYS[d.weekday()], month=d.strftime("%Y-%m")
-    )
+    prompt = os.environ.get("SYSTEM_PROMPT", "").strip()
+    if not prompt:
+        raise SystemExit(
+            "Chybí proměnná SYSTEM_PROMPT. Spouštěj generátor přes\n"
+            "  python scripts/gen_langflow_flow.py"
+        )
+    return prompt + "\n\nOdpovídej prostým textem bez markdownu."
+
+
 
 
 def _get_json(url: str, token: str | None = None, timeout: int = 60) -> dict:

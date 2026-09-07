@@ -1,8 +1,8 @@
 # Napojení n8n a LangFlow na MCP server
 
 Obě platformy z HW2 umí být MCP klientem. Zapojily se na **týž server**, který
-používají oba frameworkoví agenti — takže nad jedním MCP serverem běží čtyři
-různí klienti.
+používají všichni tři frameworkoví agenti — takže nad jedním MCP serverem
+běží pět různých klientů.
 
 **HW2 stack se přitom nemění.** Je to referenční srovnání a musí zůstat přesně
 takový, jaký se odevzdával; `git status HW2/` po celém HW3 nesmí nic ukázat.
@@ -15,12 +15,11 @@ Jediný zásah je compose překryv popsaný níž, který žije v `HW3/`.
 docker compose -f HW2/docker-compose.yml -f HW3/langflow-mcp.override.yml \
                --env-file HW2/.env --project-directory HW2 up -d langflow
 
-# vygenerovat flow (běží uvnitř kontejneru, používá builder LangFlow)
-docker compose -p rb-aiagents exec -T langflow python - \
-    < HW3/scripts/build_langflow_flow.py > HW3/flows/langflow/vykazy-agent-mcp.json
+# vygenerovat flow (wrapper předá prompt z HW1 do kontejneru)
+cd HW3 && python scripts/gen_langflow_flow.py
 
 # nahrát a rovnou vyzkoušet
-cd HW3 && python scripts/import_langflow_flow.py \
+python scripts/import_langflow_flow.py \
     --ask "Kolik hodin jsem odpracoval v srpnu 2026?"
 ```
 
@@ -66,7 +65,8 @@ jako sada nástrojů. Generátor ho proto nastavuje ručně na `data.node.tool_m
 ```bash
 cd HW3
 # id credentialu na Ollamu je vidět v URL po jeho otevření v n8n
-python scripts/build_n8n_workflow.py --credential-id <ollama-credential-id>
+python scripts/build_n8n_workflow.py     # bez ID: zástupná hodnota
+python scripts/build_n8n_workflow.py --credential-id <id>   # pro lokální běh
 python scripts/import_n8n_workflow.py --ask "Kolik hodin jsem odpracoval v srpnu 2026?"
 ```
 
@@ -99,16 +99,17 @@ být u přihlášení i u všech dalších volání stejný.
 
 ## Ověřený stav
 
-Všechny čtyři klienty odpověděly na kontrolní dotaz *„Kolik hodin jsem
+Všech pět klientů odpovědělo na kontrolní dotaz *„Kolik hodin jsem
 odpracoval v srpnu 2026?"* správně (142 hodin):
 
 | klient | jak se připojuje |
 |---|---|
-| agent Python (Pydantic AI) | `MCPToolset("http://127.0.0.1:8010/mcp")` |
-| agent .NET (Microsoft.Extensions.AI) | `HttpClientTransport`, `StreamableHttp` |
+| agent LangGraph | `MultiServerMCPClient`, transport `streamable_http` |
+| agent Pydantic AI | `MCPToolset("http://127.0.0.1:8010/mcp")` |
+| agent .NET (Microsoft Agent Framework) | `HttpClientTransport`, `StreamableHttp` |
 | n8n | uzel MCP Client Tool → `http://mcp:8000/mcp` |
 | LangFlow | komponenta MCP Tools → registrovaný server `timeagent` |
 
-Systematické měření obou frameworkových klientů je v [srovnani.md](srovnani.md);
+Systematické měření frameworkových klientů je v [srovnani.md](srovnani.md);
 u no-code platforem se ověřovalo jen spojení a jeden dotaz, protože jejich
 srovnání je předmětem HW2.

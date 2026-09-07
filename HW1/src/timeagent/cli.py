@@ -178,7 +178,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_seed = sub.add_parser("seed", help="vygenerovat anonymní demo databázi")
-    p_seed.add_argument("--months", type=int, default=6, help="kolik měsíců zpět (6)")
+    # 21 měsíců = leden 2025 až dnešek, tedy dataset, na kterém jsou naměřená
+    # čísla v docs/mereni.md. S nižší hodnotou dá  jiná data než měřená.
+    p_seed.add_argument("--months", type=int, default=21, help="kolik měsíců zpět (21)")
     p_seed.add_argument("--rng-seed", type=int, default=42, help="seed generátoru (42)")
     p_seed.set_defaults(func=cmd_seed)
 
