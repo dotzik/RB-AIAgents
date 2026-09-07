@@ -21,3 +21,8 @@ build/
 # Editory
 .vscode/
 .idea/
+
+# .NET
+bin/
+obj/
+*.user

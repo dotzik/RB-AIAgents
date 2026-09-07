@@ -7,8 +7,8 @@ liší, a ne jen tři nesouvisející ukázky.
 | Úkol | Zadání | Řešení | Stav |
 |---|---|---|---|
 | [HW1](HW1/) | Skript, který zavolá LLM API, použije nástroj a vrátí výsledek zpět modelu | Vlastní ReAct smyčka v Pythonu, 5 nástrojů nad SQLite, multiprovider přes LiteLLM | hotovo |
-| [HW2](HW2/) | Agent v no-code platformě, který pracuje s databází | n8n / LangFlow nad toutéž databází | plánováno |
-| [HW3](HW3/) | Agent postavený na frameworku, s nástroji, ideálně přes MCP | Nástroje z HW1 vystavené jako MCP server | plánováno |
+| [HW2](HW2/) | Agent v no-code platformě, který pracuje s databází | **n8n i LangFlow** nad týmiž nástroji z HW1, vystavenými jako HTTP API; součástí je Telegram bot a naměřené srovnání obou platforem | hotovo |
+| [HW3](HW3/) | Agent postavený na frameworku, s nástroji, ideálně přes MCP | Nástroje z HW1 jako **MCP server** a nad ním **dva agenti** — Pydantic AI a Microsoft.Extensions.AI; na týž server se připojily i obě platformy z HW2, takže nad ním běží čtyři klienti | hotovo |
 
 ## Data a soukromí
 

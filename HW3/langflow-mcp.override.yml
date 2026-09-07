@@ -1,0 +1,16 @@
+# Přidá `mcp` do SSRF allowlistu LangFlow. Bez toho se komponenta MCP Tools
+# nepřipojí a chyba vypadá jako problém serveru, ne jako blokace klientem.
+#
+# Překryv místo editace HW2 — mění jednu proměnnou a nic jiného.
+# Spouští se z kořene repozitáře:
+#
+#   docker compose -f HW2/docker-compose.yml -f HW3/langflow-mcp.override.yml \
+#                  --env-file HW2/.env --project-directory HW2 up -d langflow
+#
+# Návrat k samotnému HW2 compose obnoví původní výčet.
+name: rb-aiagents
+
+services:
+  langflow:
+    environment:
+      LANGFLOW_SSRF_ALLOWED_HOSTS: ${OLLAMA_HOST_ONLY:?nastav ho v HW2/.env},api,mcp,localhost,127.0.0.1

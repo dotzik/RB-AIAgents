@@ -1,0 +1,27 @@
+[project]
+name = "timeagent-mcp"
+version = "0.1.0"
+description = "Nástroje z HW1 vystavené jako MCP server — HW3, kurz AI Agents"
+requires-python = ">=3.12"
+dependencies = [
+    "mcp>=2.1.1,<3",
+    "uvicorn[standard]>=0.39.0",
+    "timeagent",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.0.0", "pytest-asyncio>=0.24.0"]
+
+[tool.uv.sources]
+timeagent = { path = "../../HW1", editable = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/timeagent_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

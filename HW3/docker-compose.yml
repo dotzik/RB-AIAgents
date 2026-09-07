@@ -1,0 +1,68 @@
+# HW3 — nástroje z HW1 jako MCP server.
+#
+# Vlastní projekt, ne rozšíření HW2. Do sítě HW2 se jen připojuje, aby na server
+# dosáhly n8n i LangFlow.
+name: rb-aiagents-hw3
+
+services:
+
+  mcp:
+    build:
+      context: ..                      # kořen repozitáře — image potřebuje HW1/
+      dockerfile: HW3/mcp/Dockerfile
+    container_name: hw3-mcp
+    restart: unless-stopped
+    environment:
+      TIMEAGENT_DB: /data/timeagent.sqlite
+      # Hostitelé navíc pro ochranu proti DNS rebindingu; výchozí je v server.py.
+      MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-}
+    volumes:
+      # Read-only, po jednom souboru — kontejner nevidí zbytek repozitáře.
+      # Druhá vrstva nad `mode=ro` v `db.connect_ro`.
+      - ${TIMEAGENT_DB_FILE:-../HW1/data/timeagent.sqlite}:/data/timeagent.sqlite:ro
+    ports:
+      # Loopback v obou rodinách: na Windows se `localhost` překládá na ::1.
+      - { target: 8000, published: "${MCP_PORT:-8010}", host_ip: 127.0.0.1, protocol: tcp }
+      - { target: 8000, published: "${MCP_PORT:-8010}", host_ip: "::1", protocol: tcp }
+    mem_limit: 512m
+    networks:
+      hw2:
+        aliases: [mcp]
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Druhý MCP server v C# — proxy nad API z HW2, nevidí databázi ani HW1.
+  # Není náhrada za `mcp`, viz docs/dva-servery.md.
+  mcp-dotnet:
+    build:
+      context: mcp-dotnet
+      dockerfile: Dockerfile
+    container_name: hw3-mcp-dotnet
+    restart: unless-stopped
+    environment:
+      TOOLS_BASE_URL: http://api:8000   # služba `api` z HW2
+    ports:
+      - { target: 8000, published: "${MCP_DOTNET_PORT:-8011}", host_ip: 127.0.0.1, protocol: tcp }
+      - { target: 8000, published: "${MCP_DOTNET_PORT:-8011}", host_ip: "::1", protocol: tcp }
+    mem_limit: 512m
+    networks:
+      hw2:
+        aliases: [mcp-dotnet]
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget -qO- http://localhost:8000/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+# Síť patří HW2; `external` znamená, že ji `down` nesmaže. Bez běžícího HW2
+# stacku `up` selže hláškou, že síť neexistuje.
+networks:
+  hw2:
+    external: true
+    name: rb-aiagents_hw2

@@ -1,0 +1,241 @@
+{
+  "truth": {
+    "srpen": {
+      "total": 142.0,
+      "top": "NWND",
+      "top_hours": 54.0
+    },
+    "cervenec": {
+      "total": 142.5
+    },
+    "cerven": {
+      "total": 134.5
+    },
+    "acme": {
+      "hours": 47.0,
+      "base": 70500.0,
+      "incl": 85305.0
+    },
+    "sazby": {
+      "acme": 1500.0
+    }
+  },
+  "runs": {
+    "langgraph": {
+      "label": "LangGraph",
+      "rows": [
+        {
+          "id": "mesic",
+          "ok": true,
+          "note": "ok",
+          "seconds": 15.7,
+          "tool_calls": 1,
+          "answer": "V srpnu 2026 jsi odpracoval celkem 142 hodin, z toho bylo fakturovatelných 135.5 hodin a nefakturovatelných 6.5 hodin. Pracoval jsi 18 dní a neúspěšně jsi se snažil dosáhnout cíle 160 hodin, což tvoří 88.8% cíle."
+        },
+        {
+          "id": "faktura",
+          "ok": true,
+          "note": "ok",
+          "seconds": 13.9,
+          "tool_calls": 1,
+          "answer": "V srpnu 2026 jsi nafakturoval klientovi Acme 47 hodin práce na projektu \"Acme — platforma objednávek\". Fakturační částka bez DPH je 70 500 CZK, s DPH 85 305 CZK."
+        },
+        {
+          "id": "nejvic",
+          "ok": true,
+          "note": "ok",
+          "seconds": 10.6,
+          "tool_calls": 1,
+          "answer": "V srpnu 2026 jsi strávil nejvíce času na projektu NWND s celkem 54 hodinami."
+        },
+        {
+          "id": "retezeni",
+          "ok": true,
+          "note": "ok",
+          "seconds": 13.0,
+          "tool_calls": 2,
+          "answer": "V červenci 2026 bylo odpracováno celkem 142.5 hodin a v srpnu 2026 142 hodin."
+        },
+        {
+          "id": "projekty",
+          "ok": true,
+          "note": "ok",
+          "seconds": 20.7,
+          "tool_calls": 1,
+          "answer": "Máš následující projekty s jejich hodinovými sazbami:\n\n- **Acme — platforma objednávek (Acme Corp)**: 1500 CZK/hodina\n- **Globex — mobilní aplikace (Globex)**: 1800 CZK/hodina\n- **Initech — bezpečnostní audit (Initech)**: 2100 CZK/hodina\n- **Interní — vlastní nástroje (Interní)**: 0 CZK/hodina\n- **Northwind — datový sklad (Northwind Trading)**: 1350 CZK/hodina\n\nProjekt **Initech — bezpečnostní audit** je neaktivní."
+        },
+        {
+          "id": "ukonceny",
+          "ok": false,
+          "note": "chybí text: nepracoval, žádn, nula, 0 hodin, neodpracoval",
+          "seconds": 13.0,
+          "tool_calls": 1,
+          "answer": "Pracoval jsi v srpnu 2026 na projektu Initech (záznamy jsou dostupné pro projekty: ACME, NWND, GLBX, INIT, INTR). Zkontroluj jméno projektu a zkus to znovu."
+        },
+        {
+          "id": "mimo_data",
+          "ok": true,
+          "note": "ok",
+          "seconds": 11.5,
+          "tool_calls": 1,
+          "answer": "Za červen 2024 nejsou v databázi žádné záznamy o odpracovaných hodinách. Data jsou k dispozici od 2025-01-01 do 2026-09-04."
+        },
+        {
+          "id": "kapacita",
+          "ok": true,
+          "note": "ok",
+          "seconds": 11.4,
+          "tool_calls": 1,
+          "answer": "V červnu 2026 ses cíli 160 hodin nedočkal. Odpracoval jsi celkem 134.5 hodin, což je 84.1 % cíle. Chybělo ti 25.5 hodin."
+        }
+      ],
+      "passed": 7,
+      "seconds": 109.8,
+      "median": 13.0
+    },
+    "pydantic": {
+      "label": "Pydantic AI",
+      "rows": [
+        {
+          "id": "mesic",
+          "ok": true,
+          "note": "ok",
+          "seconds": 16.9,
+          "tool_calls": 1,
+          "answer": "V srpnu 2026 jsi odpracoval celkem 142 hodin, z toho bylo fakturovatelných 135.5 hodin a nefakturovatelných 6.5 hodin. Pracoval jsi 18 dní. Cíl byl výš 160 hodin, což ses nesplnil o 18 hodin a dosáhl jsi 88.8% cíle."
+        },
+        {
+          "id": "faktura",
+          "ok": true,
+          "note": "ok",
+          "seconds": 14.0,
+          "tool_calls": 1,
+          "answer": "V srpnu 2026 jsi nafakturoval klientovi Acme 47 hodin pro projekt Acme — platforma objednávek. Celkový nafakturovaný účet činí 85 305 CZK včetně DPH."
+        },
+        {
+          "id": "nejvic",
+          "ok": true,
+          "note": "ok",
+          "seconds": 14.3,
+          "tool_calls": 1,
+          "answer": "V srpnu 2026 jsi nejvíce času strávil na projektu NWND s celkovým časem 54 hodin. Celkem byl odpracován 142 hodin na všech projektech."
+        },
+        {
+          "id": "retezeni",
+          "ok": true,
+          "note": "ok",
+          "seconds": 13.0,
+          "tool_calls": 2,
+          "answer": "V červenci 2026 jsi odpracoval celkem 142.5 hodin, zatímco v srpnu bylo odpracováno 142 hodin."
+        },
+        {
+          "id": "projekty",
+          "ok": true,
+          "note": "ok",
+          "seconds": 23.9,
+          "tool_calls": 1,
+          "answer": "Máš následující projekty s jejich hodinovými sazby:\n\n- **Acme — platforma objednávek (Acme Corp)**: 1500 CZK/hod\n- **Globex — mobilní aplikace (Globex)**: 1800 CZK/hod\n- **Initech — bezpečnostní audit (Initech)**: 2100 CZK/hod (projekt neaktivní)\n- **Interní — vlastní nástroje (Interní)**: hodinová sazba není uplatňována\n- **Northwind — datový sklad (Northwind Trading)**: 1350 CZK/hod"
+        },
+        {
+          "id": "ukonceny",
+          "ok": true,
+          "note": "ok",
+          "seconds": 15.5,
+          "tool_calls": 1,
+          "answer": "Ze záznamů v databázi nevystupují žádné hodiny odpracované v srpnu 2026 na projektu Initech. Data jsou k dispozici od 2025-01-01 do 2026-09-04."
+        },
+        {
+          "id": "mimo_data",
+          "ok": true,
+          "note": "ok",
+          "seconds": 11.3,
+          "tool_calls": 1,
+          "answer": "Za červen 2024 nejsou v databázi žádné záznamy o odpracovaných hodinách. Databáze obsahuje záznamy od 2025-01-01."
+        },
+        {
+          "id": "kapacita",
+          "ok": true,
+          "note": "ok",
+          "seconds": 11.4,
+          "tool_calls": 1,
+          "answer": "V červnu 2026 ses cíli 160 hodin nedostatečně, splnil jsi pouze 84.1% časem na 134.5 hodiny."
+        }
+      ],
+      "passed": 8,
+      "seconds": 120.3,
+      "median": 14.3
+    },
+    "dotnet": {
+      "label": "Microsoft Agent Framework",
+      "rows": [
+        {
+          "id": "mesic",
+          "ok": true,
+          "note": "ok",
+          "seconds": 15.2,
+          "tool_calls": 1,
+          "answer": "V srpnu 2026 jsi odpracoval celkem 142 hodin, z toho bylo fakturovatelných 135.5 hodin a 6.5 hodin neúčtovatelných. Pracoval jsi celkem 18 dní. Cíl byl 160 hodin, takže jsi nedosáhl plánovaného, průměrně jsi splnil 88.8% cíle."
+        },
+        {
+          "id": "faktura",
+          "ok": true,
+          "note": "ok",
+          "seconds": 12.2,
+          "tool_calls": 1,
+          "answer": "V srpnu 2026 jsi nafakturoval klientovi Acme celkem 47 hodin, což představuje částku 70 500 CZK bez DPH nebo 85 305 CZK s DPH."
+        },
+        {
+          "id": "nejvic",
+          "ok": true,
+          "note": "ok",
+          "seconds": 10.4,
+          "tool_calls": 1,
+          "answer": "V srpnu 2026 strávil nejvíce času na projektu NWND s celkem 54 hodin odpracováním."
+        },
+        {
+          "id": "retezeni",
+          "ok": true,
+          "note": "ok",
+          "seconds": 12.0,
+          "tool_calls": 2,
+          "answer": "V červenci 2026 odpracoval jsi celkem 142.5 hodin, zatímco v srpnu 2026 bylo odpracováno 142 hodin."
+        },
+        {
+          "id": "projekty",
+          "ok": true,
+          "note": "ok",
+          "seconds": 20.6,
+          "tool_calls": 1,
+          "answer": "Máte následující projekty a jejich hodinové sazby:\n\n- **Acme — platforma objednávek** (Acme Corp): 1500 CZK/hodina\n- **Globex — mobilní aplikace** (Globex): 1800 CZK/hodina\n- **Initech — bezpečnostní audit** (Initech): 2100 CZK/hodina\n- **Interní — vlastní nástroje** (Interní): 0 CZK/hodina\n- **Northwind — datový sklad** (Northwind Trading): 1350 CZK/hodina\n\nProjekt **Initech — bezpečnostní audit** není aktivní."
+        },
+        {
+          "id": "ukonceny",
+          "ok": true,
+          "note": "ok",
+          "seconds": 15.4,
+          "tool_calls": 2,
+          "answer": "V srpnu 2026 jsi na projektu Initech žádné hodiny neodpracoval. Data jsou k dispozici od 2025-01-01 do 2026-09-04."
+        },
+        {
+          "id": "mimo_data",
+          "ok": true,
+          "note": "ok",
+          "seconds": 10.2,
+          "tool_calls": 1,
+          "answer": "Za červen 2024 nejsou žádné záznamy o odpracovaných hodinách. Dostupná data jsou od 2025-01-01 do 2026-09-04."
+        },
+        {
+          "id": "kapacita",
+          "ok": true,
+          "note": "ok",
+          "seconds": 16.4,
+          "tool_calls": 1,
+          "answer": "V červnu 2026 sesplnil cíl 160 hodin nesplněno, odpracoval jsi 134.5 hodin, což je 84.1% cíle.chyba v odpovědi - oprava: V červnu 2026 jsi cíl 160 hodin nesplnil. Odpracoval jsi celkem 134.5 hodin, což je 84.1% cíle."
+        }
+      ],
+      "passed": 8,
+      "seconds": 112.4,
+      "median": 15.2
+    }
+  }
+}

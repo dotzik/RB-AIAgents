@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Systémový prompt se generuje z HW1 (scripts/export_system_prompt.py) a jen
+         se kopíruje vedle binárky. Kdyby se opsal do kódu, rozešel by se s HW1
+         a Python klient by od té chvíle dostával jiné zadání než tenhle. -->
+    <None Include="../../system_prompt.json" Link="system_prompt.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.20.0" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.9.0" />
+    <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
+    <PackageReference Include="OllamaSharp" Version="5.4.30" />
+  </ItemGroup>
+
+</Project>

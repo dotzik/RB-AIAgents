@@ -1,0 +1,140 @@
+{
+  "name": "Výkazy — agent přes MCP (HW3)",
+  "nodes": [
+    {
+      "id": "chat-trigger",
+      "name": "Chat",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -400,
+        0
+      ],
+      "webhookId": "vykazy-agent-mcp-chat",
+      "parameters": {
+        "public": true,
+        "mode": "hostedChat",
+        "authentication": "none",
+        "initialMessages": "Ptej se na výkazy — hodiny, projekty, fakturační podklady. Nástroje jdou přes MCP.",
+        "options": {}
+      }
+    },
+    {
+      "id": "agent",
+      "name": "Agent nad výkazy (MCP)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -40,
+        0
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "Jsi asistent pro analýzu výkazů odpracovaného času. Odpovídáš česky, stručně a věcně.\n\nPravidla:\n- Čísla nikdy neodhaduj ani nepočítej zpaměti — vždy je zjisti nástrojem.\n- Když neznáš přesný název projektu, nejdřív si vypiš projekty nástrojem list_projects.\n- Data zadávej v ISO formátu (YYYY-MM-DD), měsíce jako YYYY-MM.\n- Složitější dotaz rozlož na víc volání nástrojů za sebou (např. porovnání dvou období\n  = dvě volání) a teprve pak odpověz.\n- Nepovinný parametr prostě vynech — neposílej \"null\" ani prázdný řetězec.\n- Nevolej dvakrát tentýž nástroj se stejnými argumenty; výsledek už máš výš.\n- Když nástroj vrátí pole \"error\", oprav argumenty a zkus to znovu.\n- Chybovou hlášku z nástroje nikdy nepiš do odpovědi jako výsledek.\n- Uveď jen čísla, která ti v této odpovědi vrátil nástroj. Nikdy nepokračuj\n  v trendu, neodhaduj podle jiných měsíců a nepřebírej čísla z dřívější\n  konverzace — ta mohou být chybná.\n- Když nástroj vrátí nulu, prázdný seznam nebo pole \"note\", řekni rovnou, že\n  za dané období nejsou záznamy, a uveď rozsah dostupných dat z \"note\".\n- V odpovědi uveď konkrétní čísla, u peněz i měnu.\n\nDnešní datum je 2026-09-06 (neděle). Aktuální měsíc je 2026-09.\n\nOdpovídej vždy česky."
+        }
+      }
+    },
+    {
+      "id": "ollama",
+      "name": "Ollama — Spark",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        -160,
+        240
+      ],
+      "parameters": {
+        "model": "qwen2.5:32b",
+        "options": {
+          "numCtx": 32768,
+          "temperature": 0
+        }
+      },
+      "credentials": {
+        "ollamaApi": {
+          "id": "ZsJ0Hdopgu6VERgO",
+          "name": "Ollama — DGX Spark"
+        }
+      }
+    },
+    {
+      "id": "memory",
+      "name": "Paměť konverzace",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        20,
+        240
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "mcp",
+      "name": "Nástroje z MCP",
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.3,
+      "position": [
+        200,
+        240
+      ],
+      "parameters": {
+        "endpointUrl": "http://mcp:8000/mcp",
+        "serverTransport": "httpStreamable",
+        "authentication": "none",
+        "include": "all",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Chat": {
+      "main": [
+        [
+          {
+            "node": "Agent nad výkazy (MCP)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama — Spark": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agent nad výkazy (MCP)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Paměť konverzace": {
+      "ai_memory": [
+        [
+          {
+            "node": "Agent nad výkazy (MCP)",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nástroje z MCP": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agent nad výkazy (MCP)",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
