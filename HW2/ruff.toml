@@ -1,0 +1,18 @@
+# Stejná pravidla jako HW1, ať se styl mezi úkoly neliší.
+line-length = 95
+
+[lint]
+extend-select = ["UP", "SIM", "RUF", "DTZ", "B", "C4", "I"]
+# Výkazy času jsou vedené v místních kalendářních dnech, ne v okamžicích v UTC —
+# `date.today()` je tu záměr, ne opomenutí (stejné zdůvodnění jako v HW1).
+# Projekt je psaný česky; pomlčky a nezlomitelné mezery jsou záměr typografie.
+ignore = ["DTZ007", "DTZ011", "RUF001", "RUF002", "RUF003"]
+
+[lint.per-file-ignores]
+# Generátor pro LangFlow musí importovat až po úpravě sys.path — knihovny `lfx`
+# jsou dostupné jen uvnitř kontejneru.
+"scripts/build_langflow_flow.py" = ["E402"]
+
+# `Body()` v argumentu je idiom FastAPI, ne opomenutí — právě takhle se deklaruje
+# tělo požadavku. Přesun do těla funkce by rozhraní rozbil.
+"api/main.py" = ["B008"]

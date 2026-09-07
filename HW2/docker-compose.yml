@@ -1,0 +1,127 @@
+# HW2 — agent nad výkazy ve dvou no-code platformách.
+#
+# Vlastní jmenný prostor. Bez `name:` by se projekt jmenoval podle adresáře („hw2")
+# a snadno by kolidoval s čímkoli jiným na stroji — na tomhle Dockeru běží i klientská
+# dev infrastruktura. Takhle mají všechny kontejnery, síť i volumy prefix
+# `rb-aiagents_` a `docker compose down -v` nemá jak sáhnout mimo kurz.
+name: rb-aiagents
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Nástroje z HW1 jako REST. Jediná služba, která vidí databázi.
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: ..                      # kořen repozitáře — image potřebuje HW1/
+      dockerfile: HW2/api/Dockerfile
+    container_name: hw2-api
+    restart: unless-stopped
+    environment:
+      TIMEAGENT_DB: /data/timeagent.sqlite
+    volumes:
+      # Read-only a po jednom souboru, ne celý adresář — kontejner nevidí zbytek HW1/.
+      # Druhá vrstva nad `mode=ro`, se kterým otevírá spojení `db.connect_ro`.
+      - ${TIMEAGENT_DB_FILE:-../HW1/data/timeagent.sqlite}:/data/timeagent.sqlite:ro
+    ports:
+      # Jen loopback, ale v obou rodinách. Na Windows se `localhost` překládá na ::1,
+      # takže se samotným 127.0.0.1 by http://localhost:8000 nefungoval a fungovala
+      # by jen adresa zapsaná číselně. Na LAN pořád nevisí nic.
+      - { target: 8000, published: "${API_PORT:-8000}", host_ip: 127.0.0.1, protocol: tcp }
+      - { target: 8000, published: "${API_PORT:-8000}", host_ip: "::1", protocol: tcp }
+    mem_limit: 512m
+    networks: [hw2]
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # n8n — integrační nástroj, kterému přibyla AI.
+  # ---------------------------------------------------------------------------
+  n8n:
+    image: n8nio/n8n:2.38.3
+    container_name: hw2-n8n
+    restart: unless-stopped
+    environment:
+      GENERIC_TIMEZONE: Europe/Prague
+      TZ: Europe/Prague
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_RUNNERS_ENABLED: "true"
+      # Bez tohohle vrátí n8n HTTP 431 (bílá stránka), jakmile prohlížeč pošle
+      # velkou Cookie hlavičku — na stroji s dalšími službami na `localhost`
+      # se 16kB strop Node.js překročí snadno. Viz docs/instalace.md.
+      NODE_OPTIONS: --max-http-header-size=65536
+      # Adresa nástrojů uvnitř sítě projektu a modelu na LAN — obojí se
+      # ve workflow odkazuje přes tyhle proměnné, ať se nezadrátují napevno.
+      TOOLS_BASE_URL: http://api:8000
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:?nastav ho v .env, viz .env.example}
+      # Token bota. Ve workflow se na něj odkazuje `{{ $env.TELEGRAM_BOT_TOKEN }}`,
+      # takže odevzdávaný JSON tajemství neobsahuje. Credential n8n použít nejde:
+      # `$credentials` se v URL obyčejného HTTP Request nodu nerozbalí.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      # POZOR: sem nikdy nedávat /var/run/docker.sock. Návody na n8n to občas
+      # radí kvůli Execute Command node; je to cesta z kontejneru na hostitele
+      # a tenhle úkol to k ničemu nepotřebuje.
+    ports:
+      # Loopback v obou rodinách — viz komentář u služby `api`.
+      - { target: 5678, published: "${N8N_PORT:-5678}", host_ip: 127.0.0.1, protocol: tcp }
+      - { target: 5678, published: "${N8N_PORT:-5678}", host_ip: "::1", protocol: tcp }
+    mem_limit: 1g
+    networks: [hw2]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # LangFlow — vizuální LangChain. Agent bez rukou: Telegram ani cron neumí,
+  # zato je blíž tomu, co je v HW1 napsané v Pythonu.
+  # ---------------------------------------------------------------------------
+  langflow:
+    image: langflowai/langflow:1.12.0
+    container_name: hw2-langflow
+    restart: unless-stopped
+    environment:
+      LANGFLOW_HOST: 0.0.0.0
+      LANGFLOW_PORT: "7860"
+      LANGFLOW_AUTO_LOGIN: "true"
+      DO_NOT_TRACK: "true"
+      TOOLS_BASE_URL: http://api:8000
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:?nastav ho v .env, viz .env.example}
+      # LangFlow má ochranu proti SSRF, která blokuje privátní adresy. Bez tohohle
+      # výčtu neprojde ani model na Sparku, ani vlastní `api` v síti projektu —
+      # oboje má privátní IP, takže by agent zůstal bez modelu i bez nástrojů.
+      LANGFLOW_SSRF_ALLOWED_HOSTS: ${OLLAMA_HOST_ONLY:?nastav ho v .env},api,localhost,127.0.0.1
+      # LangFlow si ve výchozím stavu ukládá databázi do vlastních site-packages
+      # (`/app/.venv/.../langflow/langflow.db`). To je uvnitř obrazu, takže by se
+      # odevzdávaný flow ztratil při každé výměně image. Odsud míří do volume.
+      LANGFLOW_CONFIG_DIR: /app/langflow
+      LANGFLOW_DATABASE_URL: sqlite:////app/langflow/langflow.db
+    volumes:
+      - langflow_data:/app/langflow
+    ports:
+      # Loopback v obou rodinách — viz komentář u služby `api`.
+      - { target: 7860, published: "${LANGFLOW_PORT:-7860}", host_ip: 127.0.0.1, protocol: tcp }
+      - { target: 7860, published: "${LANGFLOW_PORT:-7860}", host_ip: "::1", protocol: tcp }
+    mem_limit: 4g
+    networks: [hw2]
+    depends_on:
+      api:
+        condition: service_healthy
+
+# Vlastní síť, žádná sdílená a žádné `external: true` — kontejnery mimo tenhle
+# projekt na `api` nedosáhnou ani jménem.
+networks:
+  hw2:
+    driver: bridge
+
+# Bez volumů zmizí odevzdávaná workflow při prvním `docker compose down`.
+volumes:
+  n8n_data:
+  langflow_data:

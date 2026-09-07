@@ -1,0 +1,696 @@
+{
+  "name": "Výkazy — agent (HW2)",
+  "nodes": [
+    {
+      "id": "chat-trigger",
+      "name": "Chat",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -880,
+        -60
+      ],
+      "webhookId": "vykazy-agent-chat",
+      "parameters": {
+        "public": true,
+        "mode": "hostedChat",
+        "authentication": "none",
+        "initialMessages": "Ptej se na výkazy — hodiny, projekty, fakturační podklady.",
+        "options": {}
+      }
+    },
+    {
+      "id": "normalize",
+      "name": "Sjednoť vstup",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -60,
+        40
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "text",
+              "name": "text",
+              "type": "string",
+              "value": "={{ $json.chatInput ?? $json.text }}"
+            },
+            {
+              "id": "channel",
+              "name": "channel",
+              "type": "string",
+              "value": "={{ $json.chatInput ? 'chat' : 'telegram' }}"
+            },
+            {
+              "id": "chatId",
+              "name": "chatId",
+              "type": "string",
+              "value": "={{ $json.chatId ?? '' }}"
+            },
+            {
+              "id": "conversationId",
+              "name": "conversationId",
+              "type": "string",
+              "value": "={{ $json.chatId ?? $json.sessionId ?? 'chat' }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "agent",
+      "name": "Agent nad výkazy",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        180,
+        40
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "options": {
+          "systemMessage": "Jsi asistent pro analýzu výkazů odpracovaného času. Odpovídáš česky, stručně a věcně.\n\nPravidla:\n- Čísla nikdy neodhaduj ani nepočítej zpaměti — vždy je zjisti nástrojem.\n- Když neznáš přesný název projektu, nejdřív si vypiš projekty nástrojem list_projects.\n- Data zadávej v ISO formátu (YYYY-MM-DD), měsíce jako YYYY-MM.\n- Složitější dotaz rozlož na víc volání nástrojů za sebou (např. porovnání dvou období\n  = dvě volání) a teprve pak odpověz.\n- Posílej přesně ta pole, která má nástroj v popisu — žádná navíc.\n- Nevolej dvakrát tentýž nástroj se stejnými argumenty; výsledek už máš výš.\n- Když nástroj vrátí pole \"error\", oprav argumenty a zkus to znovu.\n- Chybovou hlášku z nástroje nikdy nepiš do odpovědi jako výsledek.\n- Uveď jen čísla, která ti v této odpovědi vrátil nástroj. Nikdy nepokračuj\n  v trendu, neodhaduj podle jiných měsíců a nepřebírej čísla z dřívější\n  konverzace — ta mohou být chybná.\n- Když nástroj vrátí nulu, prázdný seznam nebo pole \"note\", řekni rovnou, že\n  za dané období nejsou záznamy, a uveď rozsah dostupných dat z \"note\".\n- V odpovědi uveď konkrétní čísla, u peněz i měnu.\n- Odpovídej prostým textem bez markdownu — čte se to i v Telegramu.\n\nDnešní datum je 2026-09-06 (neděle). Aktuální měsíc je 2026-09."
+        }
+      }
+    },
+    {
+      "id": "ollama",
+      "name": "Ollama — Spark",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        80,
+        300
+      ],
+      "parameters": {
+        "model": "qwen2.5:32b",
+        "options": {
+          "numCtx": 32768,
+          "temperature": 0
+        }
+      },
+      "credentials": {
+        "ollamaApi": {
+          "id": "ZsJ0Hdopgu6VERgO",
+          "name": "Ollama — DGX Spark"
+        }
+      }
+    },
+    {
+      "id": "memory",
+      "name": "Paměť konverzace",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        280,
+        300
+      ],
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Sjednoť vstup').item.json.conversationId }}-v2"
+      }
+    },
+    {
+      "id": "verify",
+      "name": "Ověř zdroj",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        40
+      ],
+      "parameters": {
+        "jsCode": "// Pojistka proti nedoloženým číslům.\n//\n// Jestli agent zavolá nástroj, je rozhodnutí modelu — nic ho k tomu nenutí.\n// qwen2.5:14b ho občas přeskočí a odpověď si domyslí; pozorováno na dotazu za\n// červen, kde vydal 167,5 h a rozpad po projektech, aniž by se API dotkl\n// (pravda je 166,0 h). Prompt na to nestačí, protože pravidlo čte tentýž model,\n// který ho porušuje.\n//\n// Tenhle uzel proto nekontroluje model, ale **běh**: podívá se, které tool uzly\n// se v tomto běhu opravdu spustily. Volání tím nevynutí — zaručí ale, že se\n// nedoložené číslo nedostane k uživateli.\n//\n// Odpověď bez čísel (pozdrav, upřesňující otázka) nástroj nepotřebuje, takže se\n// kontrola uplatní jen tam, kde odpověď něco číselně tvrdí.\n\nconst TOOLS = [\"list_projects\", \"query_time_entries\", \"summarize_by\", \"compute_invoice\", \"capacity_check\"];\n\nconst used = [];\nfor (const name of TOOLS) {\n  try {\n    if ($(name).isExecuted) used.push(name);\n  } catch (e) {\n    // Uzel se v tomto běhu vůbec neobjevil — to je legitimní stav, ne chyba.\n  }\n}\n\nconst answer = $json.output ?? '';\nconst claimsNumbers = /\\d/.test(answer);\n\nif (claimsNumbers && used.length === 0) {\n  return [{\n    json: {\n      output:\n        'Tuhle odpověď neumím doložit — nepodařilo se mi získat data z databáze ' +\n        'výkazů, takže bych ti musel čísla odhadnout. Zkus se zeptat znovu, ' +\n        'případně upřesni období.',\n      verified: false,\n      toolsUsed: [],\n    },\n  }];\n}\n\nreturn [{\n  json: {\n    // Zdroj se připojuje z běhu, ne z tvrzení modelu. Na otázku „odkud to máš\"\n    // odpovídá model jen dojmem; tohle je fakt.\n    output: used.length ? `${answer}\\n\\n[zdroj: ${used.join(', ')}]` : answer,\n    verified: true,\n    toolsUsed: used,\n  },\n}];\n"
+      }
+    },
+    {
+      "id": "schedule",
+      "name": "Každých pár vteřin",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -880,
+        200
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "seconds",
+              "secondsInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "read-offset",
+      "name": "Načti offset",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -680,
+        200
+      ],
+      "parameters": {
+        "jsCode": "// Odkud číst. Telegram posílá tytéž zprávy dokola, dokud nepotvrdíme přečtení\n// tím, že příště pošleme vyšší offset. Drží se ve statických datech workflow,\n// takže přežije mezi běhy.\nconst store = $getWorkflowStaticData('global');\nreturn [{ json: { offset: store.offset ?? 0 } }];\n"
+      }
+    },
+    {
+      "id": "get-updates",
+      "name": "Telegram getUpdates",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -480,
+        200
+      ],
+      "parameters": {
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/getUpdates",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "offset",
+              "value": "={{ $json.offset }}"
+            },
+            {
+              "name": "timeout",
+              "value": "0"
+            },
+            {
+              "name": "allowed_updates",
+              "value": "[\"message\"]"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "compute-offset",
+      "name": "Spočti nový offset",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        200
+      ],
+      "parameters": {
+        "jsCode": "// Spočítá, kam se posunout, a vrátí JEDNU položku — potvrzení přečtení se pak\n// zavolá jen jednou, ne pro každou zprávu zvlášť.\n//\n// Offset se posouvá i u aktualizací, které nezpracujeme (editace, fotky) —\n// jinak by se polling na takové zprávě zasekl a četl ji donekonečna.\nconst store = $getWorkflowStaticData('global');\nconst updates = $input.first().json.result ?? [];\n\nlet maxId = store.offset ? store.offset - 1 : 0;\nfor (const u of updates) {\n  if (u.update_id > maxId) maxId = u.update_id;\n}\n\nconst newOffset = maxId + 1;\nstore.offset = newOffset;      // jen záloha pro případ restartu n8n\nreturn [{ json: { newOffset, updates } }];\n"
+      }
+    },
+    {
+      "id": "ack",
+      "name": "Potvrď přečtení",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -160,
+        200
+      ],
+      "parameters": {
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/getUpdates",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "offset",
+              "value": "={{ $json.newOffset }}"
+            },
+            {
+              "name": "timeout",
+              "value": "0"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "unpack",
+      "name": "Rozbal zprávy",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {
+        "jsCode": "// Teprve teď, po potvrzení přečtení, se z aktualizací udělá jedna položka\n// na zprávu. Data se berou z uzlu před potvrzením — odpověď potvrzovacího\n// volání nás nezajímá.\nconst updates = $('Spočti nový offset').first().json.updates ?? [];\nconst out = [];\n\nfor (const u of updates) {\n  const msg = u.message;\n  if (!msg?.text) continue;    // fotky, samolepky a spol. ignorujeme\n  out.push({ json: { text: msg.text, chatId: msg.chat.id } });\n}\n\nreturn out;                    // prázdné pole = běh tiše skončí, agent se nespustí\n"
+      }
+    },
+    {
+      "id": "is-telegram",
+      "name": "Z Telegramu?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        420,
+        40
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "from-telegram",
+              "leftValue": "={{ $('Sjednoť vstup').item.json.channel }}",
+              "rightValue": "telegram",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "send",
+      "name": "Odpověz do Telegramu",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        640,
+        -40
+      ],
+      "parameters": {
+        "chatId": "={{ $('Sjednoť vstup').item.json.chatId }}",
+        "text": "={{ $json.output.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;') }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "odmXAhEjFSUfQn3p",
+          "name": "Telegram — TimeAgent bot"
+        }
+      }
+    },
+    {
+      "id": "chat-end",
+      "name": "Konec (odpověď do chatu)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        640,
+        120
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "tool-list_projects",
+      "name": "list_projects",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        -360,
+        480
+      ],
+      "parameters": {
+        "toolDescription": "Vypíše projekty: identifikátor, název, jméno klienta, hodinovou sazbu a měnu. Zavolej jako první, když neznáš přesný název projektu nebo potřebuješ sazbu. Sazby jinde nezjistíš.\n\nParametry (vyplň všechny):\n- žádné, nástroj se volá bez parametrů\n\nOstatní nastavení (active_only) drží API ve výchozích hodnotách a odsud se měnit nedají.",
+        "method": "POST",
+        "url": "http://api:8000/tools/list_projects",
+        "sendBody": false
+      }
+    },
+    {
+      "id": "tool-query_time_entries",
+      "name": "query_time_entries",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        -140,
+        480
+      ],
+      "parameters": {
+        "toolDescription": "Součet odpracovaných hodin za libovolné období, volitelně jen za jeden projekt. Vrací celkové hodiny, počet záznamů, počet odpracovaných dnů a několik ukázkových záznamů. Použij na období, která nejsou celý měsíc; na jeden měsíc je vhodnější capacity_check, na rozpady summarize_by.\n\nParametry (vyplň všechny):\n- date_from: Datum ve formátu YYYY-MM-DD\n- date_to: Datum ve formátu YYYY-MM-DD\n- project: Projekt — identifikátor, část názvu nebo jméno klienta Prázdný řetězec = bez omezení.\n- billable: Fakturovatelnost: true = jen práce účtovaná klientovi, false = jen neúčtovaná (interní). Vynech pro obojí. Prázdný řetězec = bez omezení.\n\nOstatní nastavení (limit) drží API ve výchozích hodnotách a odsud se měnit nedají.",
+        "method": "POST",
+        "url": "http://api:8000/tools/query_time_entries",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"date_from\": \"{date_from}\", \"date_to\": \"{date_to}\", \"project\": \"{project}\", \"billable\": \"{billable}\"}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "date_from",
+              "description": "Datum ve formátu YYYY-MM-DD",
+              "type": "string"
+            },
+            {
+              "name": "date_to",
+              "description": "Datum ve formátu YYYY-MM-DD",
+              "type": "string"
+            },
+            {
+              "name": "project",
+              "description": "Projekt — identifikátor, část názvu nebo jméno klienta Vyplň vždy; prázdný řetězec znamená bez omezení.",
+              "type": "string"
+            },
+            {
+              "name": "billable",
+              "description": "Fakturovatelnost: true = jen práce účtovaná klientovi, false = jen neúčtovaná (interní). Vynech pro obojí. Vyplň vždy; prázdný řetězec znamená bez omezení.",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "tool-summarize_by",
+      "name": "summarize_by",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        80,
+        480
+      ],
+      "parameters": {
+        "toolDescription": "Souhrn hodin seskupený podle zvolené dimenze, seřazený sestupně. Vrací pro každou skupinu její název a odpracované hodiny. Použij vždy, když se ptáš 'na čem/kdy nejvíc' nebo potřebuješ rozpad — první skupina ve výsledku je ta s nejvíce hodinami.\n\nParametry (vyplň všechny):\n- dimension: Podle čeho seskupit. project = zakázka, client = odběratel, tag = druh činnosti (vývoj, analýza, schůzka, code review, nasazení, podpora, dokumentace), day / week / month = časové období. Povolené hodnoty: project, client, day, week, month, tag.\n- date_from: Datum ve formátu YYYY-MM-DD\n- date_to: Datum ve formátu YYYY-MM-DD\n- project: Projekt — identifikátor, část názvu nebo jméno klienta Prázdný řetězec = bez omezení.\n- billable: Fakturovatelnost: true = jen účtované klientovi, false = jen interní. Vynech pro obojí. Prázdný řetězec = bez omezení.",
+        "method": "POST",
+        "url": "http://api:8000/tools/summarize_by",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"dimension\": \"{dimension}\", \"date_from\": \"{date_from}\", \"date_to\": \"{date_to}\", \"project\": \"{project}\", \"billable\": \"{billable}\"}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "dimension",
+              "description": "Podle čeho seskupit. project = zakázka, client = odběratel, tag = druh činnosti (vývoj, analýza, schůzka, code review, nasazení, podpora, dokumentace), day / week / month = časové období. Jedna z hodnot: project, client, day, week, month, tag.",
+              "type": "string"
+            },
+            {
+              "name": "date_from",
+              "description": "Datum ve formátu YYYY-MM-DD",
+              "type": "string"
+            },
+            {
+              "name": "date_to",
+              "description": "Datum ve formátu YYYY-MM-DD",
+              "type": "string"
+            },
+            {
+              "name": "project",
+              "description": "Projekt — identifikátor, část názvu nebo jméno klienta Vyplň vždy; prázdný řetězec znamená bez omezení.",
+              "type": "string"
+            },
+            {
+              "name": "billable",
+              "description": "Fakturovatelnost: true = jen účtované klientovi, false = jen interní. Vynech pro obojí. Vyplň vždy; prázdný řetězec znamená bez omezení.",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "tool-compute_invoice",
+      "name": "compute_invoice",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        300,
+        480
+      ],
+      "parameters": {
+        "toolDescription": "Fakturační podklad za jeden projekt a měsíc. Vrací fakturovatelné hodiny, sazbu, částku bez DPH (amount_excl_vat), DPH a částku celkem (amount_incl_vat). Nefakturovatelné hodiny ignoruje. Když se ptáš 'kolik naúčtovat', použij tenhle nástroj, ne násobení hodin sazbou.\n\nParametry (vyplň všechny):\n- project: Projekt — identifikátor, část názvu nebo jméno klienta\n- month: Měsíc ve formátu YYYY-MM\n\nOstatní nastavení (vat_rate) drží API ve výchozích hodnotách a odsud se měnit nedají.",
+        "method": "POST",
+        "url": "http://api:8000/tools/compute_invoice",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"project\": \"{project}\", \"month\": \"{month}\"}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "project",
+              "description": "Projekt — identifikátor, část názvu nebo jméno klienta",
+              "type": "string"
+            },
+            {
+              "name": "month",
+              "description": "Měsíc ve formátu YYYY-MM",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "tool-capacity_check",
+      "name": "capacity_check",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        520,
+        480
+      ],
+      "parameters": {
+        "toolDescription": "Přehled celého měsíce přes všechny projekty: odpracované hodiny celkem, z toho fakturovatelné a nefakturovatelné, počet odpracovaných dnů, rozdíl proti cíli a plnění v procentech. Nejrychlejší cesta k otázkám typu 'kolik hodin jsem odpracoval v měsíci'.\n\nParametry (vyplň všechny):\n- month: Měsíc ve formátu YYYY-MM\n\nOstatní nastavení (target_hours) drží API ve výchozích hodnotách a odsud se měnit nedají.",
+        "method": "POST",
+        "url": "http://api:8000/tools/capacity_check",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"month\": \"{month}\"}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "month",
+              "description": "Měsíc ve formátu YYYY-MM",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Chat": {
+      "main": [
+        [
+          {
+            "node": "Sjednoť vstup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sjednoť vstup": {
+      "main": [
+        [
+          {
+            "node": "Agent nad výkazy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent nad výkazy": {
+      "main": [
+        [
+          {
+            "node": "Ověř zdroj",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama — Spark": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agent nad výkazy",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Paměť konverzace": {
+      "ai_memory": [
+        [
+          {
+            "node": "Agent nad výkazy",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Každých pár vteřin": {
+      "main": [
+        [
+          {
+            "node": "Načti offset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Načti offset": {
+      "main": [
+        [
+          {
+            "node": "Telegram getUpdates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram getUpdates": {
+      "main": [
+        [
+          {
+            "node": "Spočti nový offset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Spočti nový offset": {
+      "main": [
+        [
+          {
+            "node": "Potvrď přečtení",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Potvrď přečtení": {
+      "main": [
+        [
+          {
+            "node": "Rozbal zprávy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rozbal zprávy": {
+      "main": [
+        [
+          {
+            "node": "Sjednoť vstup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ověř zdroj": {
+      "main": [
+        [
+          {
+            "node": "Z Telegramu?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Z Telegramu?": {
+      "main": [
+        [
+          {
+            "node": "Odpověz do Telegramu",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Konec (odpověď do chatu)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "list_projects": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agent nad výkazy",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "query_time_entries": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agent nad výkazy",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "summarize_by": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agent nad výkazy",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "compute_invoice": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agent nad výkazy",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "capacity_check": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agent nad výkazy",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
