@@ -9,7 +9,7 @@ Model se zadává jako `poskytovatel/název`. Prefix určuje, jak se volání p�
 | Backend | `TIMEAGENT_MODEL` | `TIMEAGENT_API_BASE` | Klíč |
 |---|---|---|---|
 | Ollama lokálně | `ollama_chat/qwen2.5:14b` | `http://localhost:11434` | — |
-| Ollama na jiném stroji | `ollama_chat/qwen3:14b` | `http://192.168.0.24:11434` | — |
+| Ollama na jiném stroji | `ollama_chat/qwen3:14b` | `http://ollama.lan:11434` | — |
 | LM Studio | `openai/qwen/qwen3-4b-2507` | `http://localhost:1234/v1` | libovolná hodnota |
 | Anthropic | `anthropic/claude-haiku-4-5` | *nenastavovat* | `ANTHROPIC_API_KEY` |
 | OpenAI | `gpt-4o-mini` | *nenastavovat* | `OPENAI_API_KEY` |
@@ -77,13 +77,13 @@ Na klientovi:
 
 ```bash
 TIMEAGENT_MODEL=ollama_chat/qwen2.5:32b
-TIMEAGENT_API_BASE=http://192.168.0.24:11434
+TIMEAGENT_API_BASE=http://ollama.lan:11434
 ```
 
 Ověření dostupnosti:
 
 ```bash
-curl -s http://192.168.0.24:11434/api/tags
+curl -s http://ollama.lan:11434/api/tags
 ```
 
 Prázdná odpověď nebo timeout znamená, že server buď neběží, nebo poslouchá jen

@@ -88,8 +88,9 @@ jestli v odpovědi zazněla správná čísla. Podrobnosti o metodice v
 
 ```bash
 uv run timeagent bench --models ollama_chat/qwen2.5:14b
-uv run timeagent bench --models ollama_chat/qwen2.5:14b,ollama_chat/qwen2.5:32b \
-                       --api-base http://192.168.0.24:11434 --json
+uv run timeagent bench \
+    --models ollama_chat/qwen2.5:14b,ollama_chat/qwen2.5:32b \
+    --api-base http://ollama.lan:11434 --json
 ```
 
 | Přepínač | Výchozí | Význam |

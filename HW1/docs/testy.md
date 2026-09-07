@@ -1,7 +1,7 @@
 # Testy
 
 ```bash
-uv run pytest -q             # 86 testů, běží do vteřiny
+uv run pytest -q             # 106 testů, běží do vteřiny
 uv run pytest -v             # s názvy
 uv run pytest tests/test_agent.py -k rescue
 uvx ruff check src tests     # linter
@@ -14,9 +14,9 @@ ta se měří jinak, viz [mereni.md](mereni.md).
 
 | Soubor | Testů | Co ověřuje |
 |---|---|---|
-| `test_tools.py` | 31 | nástroje proti přímým SQL dotazům, chybové stavy, narovnání argumentů |
-| `test_agent.py` | 20 | ReAct smyčku proti podvrženému LLM, pojistky |
-| `test_bench.py` | 13 | vyhodnocování benchmarku |
+| `test_tools.py` | 35 | nástroje proti přímým SQL dotazům, chybové stavy, narovnání argumentů |
+| `test_agent.py` | 23 | ReAct smyčku proti podvrženému LLM, pojistky |
+| `test_bench.py` | 26 | vyhodnocování benchmarku |
 | `test_clockify.py` | 13 | čisté funkce importu — parsování trvání, sazeb, hranic měsíce |
 | `test_llm.py` | 9 | volbu poskytovatele a endpointu |
 

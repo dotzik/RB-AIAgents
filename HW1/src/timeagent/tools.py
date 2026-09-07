@@ -96,6 +96,28 @@ def _billable_clause(billable: bool | None) -> tuple[str, list[Any]]:
     return " AND e.billable = ?", [1 if billable else 0]
 
 
+def _empty_note(conn: sqlite3.Connection) -> str:
+    """Věta do výsledku, když dotaz nic nenašel.
+
+    Nula sama o sobě je pro model dvojznačná: neví, jestli se v tom období
+    nepracovalo, nebo jestli tam databáze prostě nesahá. Když to nedostane
+    řečené, dopočítá si „pokračování trendu" a vydá vymyšlená čísla — pozorováno
+    na dotazech na říjen a listopad, které v datech nejsou.
+
+    Proto se vrací hotová věta včetně rozsahu dat, kterou může model rovnou
+    zopakovat. Je to táž zásada jako u `{"error": ...}`: dát modelu fakt
+    v podobě, se kterou umí pracovat, místo aby si domýšlel.
+    """
+    row = conn.execute("SELECT MIN(date) AS od, MAX(date) AS do FROM time_entries").fetchone()
+    if not row or not row["od"]:
+        return "Databáze neobsahuje žádné výkazy."
+    return (
+        "Za zadané období nejsou v databázi žádné záznamy. "
+        f"Data jsou k dispozici od {row['od']} do {row['do']}. "
+        "Neodhaduj chybějící hodnoty — odpověz, že za dané období záznamy nejsou."
+    )
+
+
 # --------------------------------------------------------------------------
 # Nástroje
 # --------------------------------------------------------------------------
@@ -156,7 +178,9 @@ def query_time_entries(
             [*params, limit],
         ).fetchall()
 
-    return {
+        note = _empty_note(conn) if agg["entries"] == 0 else None
+
+    out = {
         "date_from": date_from,
         "date_to": date_to,
         "project": proj_row["id"] if proj_row else None,
@@ -166,6 +190,9 @@ def query_time_entries(
         "days_worked": agg["days"],
         "sample_entries": db.rows_to_dicts(sample),
     }
+    if note:
+        out["note"] = note
+    return out
 
 
 _DIMENSIONS: dict[str, str] = {
@@ -214,14 +241,19 @@ def summarize_by(
             params,
         ).fetchall()
 
+        note = _empty_note(conn) if not rows else None
+
     groups = db.rows_to_dicts(rows)
-    return {
+    out = {
         "dimension": dimension,
         "date_from": date_from,
         "date_to": date_to,
         "total_hours": round(sum(g["hours"] for g in groups), 2),
         "groups": groups,
     }
+    if note:
+        out["note"] = note
+    return out
 
 
 def compute_invoice(project: str, month: str, vat_rate: float = 0.21) -> dict[str, Any]:
@@ -247,6 +279,8 @@ def compute_invoice(project: str, month: str, vat_rate: float = 0.21) -> dict[st
             (proj["id"], date_from, date_to),
         ).fetchone()
 
+        note = _empty_note(conn) if row["entries"] == 0 else None
+
     hours = round(row["hours"], 2)
     base = round(hours * proj["hourly_rate"], 2)
     vat = round(base * vat_rate, 2)
@@ -263,6 +297,7 @@ def compute_invoice(project: str, month: str, vat_rate: float = 0.21) -> dict[st
         "vat_rate": vat_rate,
         "vat_amount": vat,
         "amount_incl_vat": round(base + vat, 2),
+        **({"note": note} if note else {}),
     }
 
 
@@ -288,6 +323,8 @@ def capacity_check(month: str, target_hours: float = 160.0) -> dict[str, Any]:
             (date_from, date_to),
         ).fetchone()
 
+        note = _empty_note(conn) if row["days"] == 0 else None
+
     total = round(row["total"], 2)
     billable = round(row["billable"], 2)
     return {
@@ -300,6 +337,7 @@ def capacity_check(month: str, target_hours: float = 160.0) -> dict[str, Any]:
         "difference": round(total - target, 2),
         "fulfilment_pct": round(total / target * 100, 1),
         "status": "splněno" if total >= target else "nesplněno",
+        **({"note": note} if note else {}),
     }
 
 

@@ -36,12 +36,18 @@ měsíce") projde tou smyčkou dvakrát.
 
 ## Vrstvy
 
-```
-cli.py            příkazová řádka, formátování výstupu
-  └── agent.py    ReAct smyčka, pojistky, počítání tokenů
-        ├── llm.py     jediné místo, které zná poskytovatele (LiteLLM)
-        └── tools.py   nástroje, JSON schémata, registr
-              └── db.py    SQLite, read-only spojení
+```mermaid
+flowchart TD
+    CLI["cli.py<br/>příkazová řádka, formátování výstupu"]
+    AGENT["agent.py<br/>ReAct smyčka, pojistky, počítání tokenů"]
+    LLM["llm.py<br/>jediné místo, které zná poskytovatele (LiteLLM)"]
+    TOOLS["tools.py<br/>nástroje, JSON schémata, registr"]
+    DB["db.py<br/>SQLite, read-only spojení"]
+
+    CLI --> AGENT
+    AGENT --> LLM
+    AGENT --> TOOLS
+    TOOLS --> DB
 ```
 
 Závislosti vedou jen jedním směrem. **`tools.py` a `db.py` neimportují nic z LLM

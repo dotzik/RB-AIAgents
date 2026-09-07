@@ -222,3 +222,51 @@ def test_project_lookup_still_matches_substrings(demo_db):
     """Escapování nesmí rozbít běžné částečné hledání."""
     assert tools.compute_invoice("acme", "2026-08")["project"] == "ACME"
     assert tools.compute_invoice("Northwind", "2026-08")["project"] == "NWND"
+
+
+# --------------------------------------------------------------------------
+# Prázdné období — regrese proti vymýšlení čísel
+# --------------------------------------------------------------------------
+
+def test_empty_period_carries_note_with_data_range(demo_db):
+    """Nula musí být doprovázená větou, že tam data nesahají.
+
+    Regrese: agent dostal na dotaz za listopad nulu, vyložil si ji jako
+    „pokračuj v trendu" a vydal vymyšlený rozpad po projektech. Ta čísla se
+    pak z paměti konverzace přenesla i do odpovědí o měsících, které v datech
+    jsou. Samotná nula je dvojznačná — model nepozná „nepracovalo se" od
+    „databáze tam nesahá", takže mu to musí říct nástroj.
+    """
+    out = tools.capacity_check(month="2026-12")
+
+    assert out["total_hours"] == 0
+    assert "note" in out
+    assert "nejsou v databázi žádné záznamy" in out["note"]
+    assert "2026-" in out["note"]          # rozsah dat, ať ho může model zopakovat
+
+
+def test_note_appears_only_when_nothing_found(demo_db):
+    """Měsíc s daty poznámku nemá — jinak by kalila normální odpovědi."""
+    assert "note" not in tools.capacity_check(month="2026-08")
+    assert "note" not in tools.summarize_by(
+        dimension="project", date_from="2026-08-01", date_to="2026-08-31"
+    )
+
+
+def test_empty_period_note_in_every_aggregating_tool(demo_db):
+    """Všechny tři agregující nástroje se chovají stejně."""
+    empty = [
+        tools.query_time_entries(date_from="2026-12-01", date_to="2026-12-31"),
+        tools.summarize_by(dimension="project", date_from="2026-12-01", date_to="2026-12-31"),
+        tools.capacity_check(month="2026-12"),
+    ]
+    assert all("note" in out for out in empty)
+
+
+def test_invoice_for_month_without_entries_has_note(demo_db):
+    """Faktura na nulu je podezřelá vždycky — model má vědět proč."""
+    out = tools.compute_invoice(project="ACME", month="2026-12")
+
+    assert out["billable_hours"] == 0
+    assert out["amount_excl_vat"] == 0
+    assert "note" in out

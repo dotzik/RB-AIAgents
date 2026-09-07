@@ -12,14 +12,14 @@ $ uv run timeagent ask "Kolik jsem v 2026-08 nafakturoval klientovi Acme?"
 
 --- krok 1 ---
   nástroj: compute_invoice(project='Acme', month='2026-08')
-  výsledek: {"project": "ACME", "client": "Acme Corp", "billable_hours": 62.0,
-             "amount_excl_vat": 93000.0, "amount_incl_vat": 112530.0, ...}
+  výsledek: {"project": "ACME", "client": "Acme Corp", "billable_hours": 47.0,
+             "amount_excl_vat": 70500.0, "amount_incl_vat": 85305.0, ...}
 --- krok 2 ---
   hotovo — model už nepotřebuje nástroj
 
 ========================================================================
-V srpnu 2026 jsi klientovi Acme Corp naúčtoval 62 hodin, tedy 93 000 Kč
-bez DPH (112 530 Kč včetně).
+V srpnu 2026 jsi nafakturoval klientovi Acme 47 hodin práce za celkovou
+částku 85 305 CZK, z toho 70 500 CZK bez DPH a 14 805 CZK DPH.
 ========================================================================
 ```
 
@@ -34,7 +34,7 @@ cp .env.example .env
 uv sync
 
 ollama pull qwen2.5:14b        # výchozí model — v měření 39/39, viz docs/mereni.md
-uv run timeagent seed          # vygeneruje demo databázi
+uv run timeagent seed --months 21   # demo data: leden 2025 až dnešek
 uv run timeagent ask "Kolik hodin jsem odpracoval v 2026-08?"
 ```
 
@@ -77,7 +77,7 @@ jsou v `.gitignore`.
 ## Vývoj
 
 ```bash
-uv run pytest -q          # 86 testů, běží bez API klíče i bez modelu
+uv run pytest -q          # 106 testů, běží bez API klíče i bez modelu
 uvx ruff check src tests  # linter
 ```
 
@@ -91,7 +91,7 @@ src/timeagent/
   bench.py               srovnání modelů na pevné sadě dotazů
   cli.py                 příkazová řádka
   importers/clockify.py  volitelný import reálných dat
-tests/                   86 testů, podrobnosti v docs/testy.md
+tests/                   106 testů, podrobnosti v docs/testy.md
 ```
 
 `tools.py` a `db.py` neimportují nic z LiteLLM ani ze SDK poskytovatele — dají se

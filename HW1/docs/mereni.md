@@ -6,10 +6,20 @@ se přitom ukázalo o modelech, hardwaru i o návrhu samotné metriky.
 
 Naměřeno 3.–4. září 2026.
 
+
+> **Poznámka k datům.** Měření proběhlo nad tehdejším demo datasetem
+> (šest měsíců zpět). Dataset se od té doby rozšířil na leden 2025 až dnešek,
+> takže konkrétní hodiny a částky v ukázkách odpovědí už neodpovídají aktuální
+> databázi. Přepisovat je by znamenalo falšovat záznam měření; úspěšnosti
+> a poznatky platí dál, protože bench očekávané hodnoty počítá z databáze
+> za běhu.
+
 ## Metodika
 
 ```bash
-uv run timeagent bench --models ollama_chat/qwen2.5:14b,ollama_chat/qwen2.5:32b                        --api-base http://192.168.0.24:11434 --repeat 3 --json
+uv run timeagent bench \
+    --models ollama_chat/qwen2.5:14b,ollama_chat/qwen2.5:32b \
+    --api-base http://ollama.lan:11434 --repeat 3 --json
 ```
 
 **Třináct dotazů** stoupající obtížnosti, pro všechny modely shodné. Každý se

@@ -87,12 +87,11 @@ query_time_entries(date_from="2026-08-01", date_to="2026-08-31", project="Acme",
   "date_to": "2026-08-31",
   "project": "ACME",
   "billable_filter": null,
-  "total_hours": 62.0,
-  "entry_count": 22,
-  "days_worked": 15,
+  "total_hours": 47.0,
+  "entry_count": 17,
+  "days_worked": 11,
   "sample_entries": [
-    {"date": "2026-08-28", "project_id": "ACME", "client": "Acme Corp", "hours": 3.0,
-     "description": "refaktoring importní pipeline", "billable": 1, "tag": "vyvoj"}
+    {"date": "2026-08-28", "project_id": "ACME", "client": "Acme Corp", "hours": 2.5, "description": "analýza požadavků — migrace dat", "billable": 1, "tag": "analyza"}
   ]
 }
 ```
@@ -123,10 +122,18 @@ summarize_by(dimension="project", date_from="2026-08-01", date_to="2026-08-31")
   "dimension": "project",
   "date_from": "2026-08-01",
   "date_to": "2026-08-31",
-  "total_hours": 179.5,
+  "total_hours": 142.0,
   "groups": [
-    {"bucket": "NWND", "hours": 68.5, "entries": 21},
-    {"bucket": "ACME", "hours": 62.0, "entries": 22}
+    {
+      "bucket": "NWND",
+      "hours": 54.0,
+      "entries": 18
+    },
+    {
+      "bucket": "ACME",
+      "hours": 47.0,
+      "entries": 17
+    }
   ]
 }
 ```
@@ -156,14 +163,14 @@ compute_invoice(project="Acme", month="2026-08")
   "project_name": "Acme — platforma objednávek",
   "client": "Acme Corp",
   "month": "2026-08",
-  "billable_hours": 62.0,
-  "entry_count": 22,
+  "billable_hours": 47.0,
+  "entry_count": 17,
   "hourly_rate": 1500.0,
   "currency": "CZK",
-  "amount_excl_vat": 93000.0,
+  "amount_excl_vat": 70500.0,
   "vat_rate": 0.21,
-  "vat_amount": 19530.0,
-  "amount_incl_vat": 112530.0
+  "vat_amount": 14805.0,
+  "amount_incl_vat": 85305.0
 }
 ```
 
@@ -188,14 +195,14 @@ capacity_check(month="2026-08", target_hours=160)
 ```json
 {
   "month": "2026-08",
-  "total_hours": 179.5,
-  "billable_hours": 166.0,
-  "non_billable_hours": 13.5,
-  "days_worked": 21,
+  "total_hours": 142.0,
+  "billable_hours": 135.5,
+  "non_billable_hours": 6.5,
+  "days_worked": 18,
   "target_hours": 160.0,
-  "difference": 19.5,
-  "fulfilment_pct": 112.2,
-  "status": "splněno"
+  "difference": -18.0,
+  "fulfilment_pct": 88.8,
+  "status": "nesplněno"
 }
 ```
 
