@@ -1,0 +1,24 @@
+# Politika přístupu k MCP serveru s gate (mitigace M1).
+# Kopie jako `access.toml` (necommituje se), cesta v env TIMEAGENT_POLICY.
+# Soubor se čte při každém požadavku: odebrání chat_id platí hned.
+#
+# Tokeny se sem nepíšou, jen jejich SHA-256:
+#   python -c "import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode()).hexdigest())" <token>
+
+# Služba = jeden MCP klient. Role:
+#   owner         vše jako dnes (agenti a LangFlow vlastníka)
+#   client-proxy  jen za klienta podle hlavičky X-Timeagent-Chat-Id (n8n Telegram)
+
+[services.n8n-telegram]
+token_sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+role = "client-proxy"
+
+[services.owner-cli]
+token_sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+role = "owner"
+
+# Telegram chat_id -> hodnota sloupce projects.client.
+# Jeden klient může mít víc chat_id (víc kontaktních osob).
+[clients]
+"1001" = "Acme Corp"
+"2002" = "Northwind Trading"

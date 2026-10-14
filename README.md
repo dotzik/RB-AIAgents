@@ -10,6 +10,13 @@ liší, a ne jen tři nesouvisející ukázky.
 | [HW2](HW2/) | Agent v no-code platformě, který pracuje s databází | **n8n i LangFlow** nad týmiž nástroji z HW1, vystavenými jako HTTP API; součástí je Telegram bot a naměřené srovnání obou platforem | hotovo |
 | [HW3](HW3/) | Agent postavený na frameworku, s nástroji, ideálně přes MCP | Nástroje z HW1 jako **MCP server** a nad ním **tři agenti** — Microsoft Agent Framework, LangGraph a Pydantic AI; na týž server se připojily i obě platformy z HW2, takže nad ním běží pět klientů | hotovo |
 
+## Bezpečnostní návrh
+
+[security/](security/) je závěrečný projekt kurzu *Security for AI*:
+threat model timeagenta pro klienty přes Telegram a autorizační gate
+v MCP serveru s testem. Čitelná verze v jednom souboru je
+[security/bezpecnostni-navrh.html](security/bezpecnostni-navrh.html).
+
 ## Data a soukromí
 
 Repozitář neobsahuje žádná reálná data ani jména klientů. Databáze se generuje

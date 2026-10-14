@@ -1,0 +1,4 @@
+# Skutečná politika obsahuje Telegram chat_id (osobní údaje) a hashe tokenů.
+access.toml
+# Auditní log rozhodnutí gate.
+*.jsonl
