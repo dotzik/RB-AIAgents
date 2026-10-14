@@ -72,5 +72,5 @@ U každé hrozby: **kdo ovládá vstup → kterou hranici překračuje → dopad
 | Hrozba | Proč neplatí |
 |---|---|
 | Zápisové akce | žádné nejsou, nástroje jsou read-only, DB `:ro` |
-| SQL injection | parametrizované dotazy, `dimension` z whitelistu (`tools.py:225`) |
+| SQL injection | parametrizované dotazy, `dimension` z whitelistu (`tools.py:201-208`, kontrola `:219`) |
 | Chybný výpočet faktury modelem | částky počítá deterministický `compute_invoice`; n8n uzel „Ověř zdroj“ zahodí číselnou odpověď, pokud neběžel nástroj |

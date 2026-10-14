@@ -96,7 +96,10 @@ flowchart LR
 | Únik bez projektu | `query_time_entries` a `summarize_by` bez projektu sečtou všechny klienty | `tools.py:135`, `:211` |
 | Únik přes dimenzi | `summarize_by(dimension="client")` rozepíše hodiny podle klientů | `tools.py:211` |
 | Únik přes kapacitu | `capacity_check` projekt nebere, vrací celkový objem | `tools.py:323` |
+| Únik přes seznam | `list_projects` vrátí všechny projekty, klienty a sazby; prompt ho modelu doporučuje volat jako první | `tools.py:125-132` |
 | Únik přes chybu | neznámý projekt → hláška vypíše všechny projekty a klienty | `tools.py:78-83` |
+| Únik přes nejednoznačnost | částečná shoda názvu → hláška vypíše odpovídající projekty, i cizí | `tools.py:84-89` |
+| Únik přes prázdný výsledek | poznámka `note` uvádí rozsah dat přes všechny klienty; prompt ji modelu velí zopakovat | `tools.py:99-118` |
 | Telegram | bere `text` a `chat.id` od kohokoli, žádný allowlist | `HW2/scripts/build_n8n_workflow.py:77-91` |
 | Autentizace služeb | žádná: oba MCP servery, REST API, chat webhook n8n (`public: true`) | compose, workflow |
 | Ochrana MCP | jen kontrola Host/Origin (proti DNS rebindingu, ne proti volajícímu) | `server.py` |
@@ -104,7 +107,7 @@ flowchart LR
 | Síť | porty publikované jen na loopback, uvnitř sítě vše na `0.0.0.0` | compose |
 | Model | Ollama přes `OLLAMA_BASE_URL`, výchozí LAN po plain HTTP | `.env`, agenti |
 | Logy | audit chybí; n8n drží historii běhů bez retence | — |
-| Systémový prompt | pravidla proti vymýšlení čísel, nic proti injection ani k důvěrnosti | `agent.py:28-49` |
+| Systémový prompt | pravidla proti vymýšlení čísel, nic proti injection ani k důvěrnosti; společný pro agenty HW3 | `HW3/agents/system_prompt.json` (generovaný z `HW1/src/timeagent/agent.py`) |
 | Testy | 106 + 7 + 6, žádný bezpečnostní | — |
 
 **Fakta z provozu**

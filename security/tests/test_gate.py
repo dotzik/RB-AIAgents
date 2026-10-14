@@ -1,4 +1,4 @@
-"""Test mitigace M1: autorizační gate v MCP serveru (kap. 7, případy V1–V12).
+"""Test mitigace M1: autorizační gate v MCP serveru (kap. 7, případy V0–V13).
 
 Kontroluje se obsah odpovědi proti databázi a auditní log, ne text hlášky.
 Zakázaný „side effect“ read-only nástrojů je předání cizích dat.
@@ -9,9 +9,13 @@ import json
 import sqlite3
 
 import httpx2
+from mcp import Client
+from mcp.client.streamable_http import streamable_http_client
 from timeagent import tools
 
-from conftest import CLIENT_A, CLIENT_B, DEFAULT_CLIENTS, audit_records, call, write_policy
+from conftest import (
+    CLIENT_A, CLIENT_B, DEFAULT_CLIENTS, FOREIGN_LAST_DAY, audit_records, call, headers, write_policy,
+)
 
 # Cokoli z toho v odpovědi klientovi A = únik cizích dat.
 FOREIGN = ["NWND", "GLBX", "INIT", "INTR", "Northwind", "Globex", "Initech", "1350"]
@@ -88,15 +92,18 @@ async def test_v3_dotaz_bez_projektu_nesecte_vsechny_klienty(env, server_url):
 
 async def test_v4_souhrn_pres_klienty_a_kapacita_jsou_zamitnuty(env, server_url):
     by_client = await call(server_url, "summarize_by",
-                           {"dimension": "client", "date_from": "2026-05-01", "date_to": "2026-08-31",
-                            "project": "ACME"},
+                           {"dimension": "client", "date_from": "2026-05-01", "date_to": "2026-08-31"},
                            service="n8n-telegram", chat_id=CLIENT_A)
     capacity = await call(server_url, "capacity_check", {"month": "2026-08"},
                           service="n8n-telegram", chat_id=CLIENT_A)
+    async with httpx2.AsyncClient(headers=headers("n8n-telegram", CLIENT_A), timeout=30) as http:
+        async with Client(streamable_http_client(server_url, http_client=http)) as client:
+            listed = {t.name for t in (await client.list_tools()).tools}
 
     assert by_client.get("denied") == "dimension_not_allowed"
     assert capacity.get("denied") == "tool_not_allowed"
     assert _leaks(by_client) == [] and _leaks(capacity) == []
+    assert "capacity_check" not in listed and "compute_invoice" in listed
 
 
 async def test_v5_neexistujici_projekt_nevypise_cizi_projekty(env, server_url):
@@ -184,3 +191,19 @@ async def test_v12_revokace_plati_hned(env, server_url):
     assert before["client"] == "Acme Corp"
     assert after.get("denied") == "unknown_chat_id"
     assert "billable_hours" not in after
+
+
+async def test_v13_prazdny_vysledek_neprozradi_rozsah_cizich_dat(env, server_url):
+    """Poznámka knihovny o prázdném výsledku uvádí rozsah dat přes všechny klienty."""
+    payload = await call(server_url, "compute_invoice", {"project": "ACME", "month": "2026-09"},
+                         service="n8n-telegram", chat_id=CLIENT_A)
+    with sqlite3.connect(env["db"]) as conn:
+        (own_last,) = conn.execute(
+            "SELECT MAX(e.date) FROM time_entries e JOIN projects p ON p.id = e.project_id "
+            "WHERE p.client = 'Acme Corp'"
+        ).fetchone()
+
+    assert payload["billable_hours"] == 0
+    assert own_last < FOREIGN_LAST_DAY
+    assert f"do {own_last}" in payload["note"]
+    assert FOREIGN_LAST_DAY not in json.dumps(payload)

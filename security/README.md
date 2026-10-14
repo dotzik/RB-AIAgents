@@ -25,9 +25,9 @@ a `db.py`), kterou MCP server importuje. Odkazy do `HW1/` míří na ni.
 - **Klíčová mitigace (implementovaná v kap. 7):** autorizační gate v MCP
   serveru. Identitu odvodí z ověřeného Telegram `chat_id`, nikdy z promptu ani
   z argumentu nástroje, a každý nástroj omezí na projekty dané identity.
-- **Důkaz:** test přes skutečný MCP protokol nad syntetickými daty, 13/13
-  prošlo. S vypnutým gate padá všech 8 zakázaných případů s cizími daty
-  ve výstupu.
+- **Důkaz:** test přes skutečný MCP protokol nad syntetickými daty, 14/14
+  prošlo. S vypnutým gate (`--gate-off`) padá všech 9 případů, kde má gate
+  zastavit cizí data, a cizí data jsou přímo ve výstupu.
 
 ```bash
 cd security && uv sync && uv run pytest -v
@@ -39,10 +39,10 @@ cd security && uv sync && uv run pytest -v
 
 | # | Oblast hodnocení | Soubor | Stav |
 |---|---|---|---|
-| 1 | Kontext a architektura | [01-architektura.md](01-architektura.md) | koncept |
-| 2 | Threat model | [02-threat-model.md](02-threat-model.md) | koncept |
-| 3 | Prioritizace rizik | [03-prioritizace.md](03-prioritizace.md) | koncept |
-| 4 | Návrh mitigací | [04-mitigace.md](04-mitigace.md) | koncept |
-| 5 | Plán ověření | [05-overeni.md](05-overeni.md) | koncept |
-| 6 | Provoz a governance | [06-provoz-governance.md](06-provoz-governance.md) | koncept |
+| 1 | Kontext a architektura | [01-architektura.md](01-architektura.md) | hotovo |
+| 2 | Threat model | [02-threat-model.md](02-threat-model.md) | hotovo |
+| 3 | Prioritizace rizik | [03-prioritizace.md](03-prioritizace.md) | hotovo |
+| 4 | Návrh mitigací | [04-mitigace.md](04-mitigace.md) | hotovo |
+| 5 | Plán ověření | [05-overeni.md](05-overeni.md) | hotovo |
+| 6 | Provoz a governance | [06-provoz-governance.md](06-provoz-governance.md) | hotovo |
 | 7 | Implementovaná mitigace s testem | [07-implementace.md](07-implementace.md) | hotovo, test prošel |

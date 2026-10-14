@@ -49,6 +49,25 @@ def write_policy(path: Path, clients: dict[str, str]) -> None:
 
 
 DEFAULT_CLIENTS = {CLIENT_A: "Acme Corp", CLIENT_B: "Northwind Trading"}
+# Záznam jiného klienta mimo rozsah dat Acme (V13).
+FOREIGN_LAST_DAY = "2026-09-30"
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--gate-off", action="store_true",
+        help="vypne gate (vše povoleno, výstup nefiltrován); kontrola, že test opravdu testuje gate",
+    )
+
+
+def pytest_configure(config):
+    if config.getoption("--gate-off"):
+        import timeagent_gate.server as srv
+        from timeagent_gate.gate import Decision
+
+        srv.authorize = lambda identity, name, arguments: Decision(True, "gate_off", dict(arguments))
+        srv.filter_result = lambda identity, name, result: result
+        srv.visible_tools = lambda identity, names: names
 
 
 @pytest.fixture
@@ -60,6 +79,11 @@ def env(tmp_path, monkeypatch):
     conn.execute(
         "INSERT INTO projects (id, name, client, hourly_rate, currency, active) "
         "VALUES ('ACM2', 'Acme — podpora provozu', 'Acme Corp', 1200.0, 'CZK', 1)"
+    )
+    conn.execute(
+        "INSERT INTO time_entries (id, project_id, date, hours, description, billable, tag) "
+        "VALUES ('foreign-last', 'NWND', ?, 2.0, 'mimo rozsah Acme', 1, NULL)",
+        (FOREIGN_LAST_DAY,),
     )
     conn.commit()
     conn.close()

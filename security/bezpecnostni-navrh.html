@@ -81,9 +81,9 @@ a <code>db.py</code>), kterou MCP server importuje. Odkazy do <code>HW1/</code> 
 <li><strong>Klíčová mitigace (implementovaná v kap. 7):</strong> autorizační gate v MCP
   serveru. Identitu odvodí z ověřeného Telegram <code>chat_id</code>, nikdy z promptu ani
   z argumentu nástroje, a každý nástroj omezí na projekty dané identity.</li>
-<li><strong>Důkaz:</strong> test přes skutečný MCP protokol nad syntetickými daty, 13/13
-  prošlo. S vypnutým gate padá všech 8 zakázaných případů s cizími daty
-  ve výstupu.</li>
+<li><strong>Důkaz:</strong> test přes skutečný MCP protokol nad syntetickými daty, 14/14
+  prošlo. S vypnutým gate (<code>--gate-off</code>) padá všech 9 případů, kde má gate
+  zastavit cizí data, a cizí data jsou přímo ve výstupu.</li>
 </ul>
 <pre><code class="language-bash">cd security &amp;&amp; uv sync &amp;&amp; uv run pytest -v
 </code></pre>
@@ -103,37 +103,37 @@ a <code>db.py</code>), kterou MCP server importuje. Odkazy do <code>HW1/</code> 
 <td>1</td>
 <td>Kontext a architektura</td>
 <td><a href="#k01" data-tab="k01">01-architektura.md</a></td>
-<td>koncept</td>
+<td>hotovo</td>
 </tr>
 <tr>
 <td>2</td>
 <td>Threat model</td>
 <td><a href="#k02" data-tab="k02">02-threat-model.md</a></td>
-<td>koncept</td>
+<td>hotovo</td>
 </tr>
 <tr>
 <td>3</td>
 <td>Prioritizace rizik</td>
 <td><a href="#k03" data-tab="k03">03-prioritizace.md</a></td>
-<td>koncept</td>
+<td>hotovo</td>
 </tr>
 <tr>
 <td>4</td>
 <td>Návrh mitigací</td>
 <td><a href="#k04" data-tab="k04">04-mitigace.md</a></td>
-<td>koncept</td>
+<td>hotovo</td>
 </tr>
 <tr>
 <td>5</td>
 <td>Plán ověření</td>
 <td><a href="#k05" data-tab="k05">05-overeni.md</a></td>
-<td>koncept</td>
+<td>hotovo</td>
 </tr>
 <tr>
 <td>6</td>
 <td>Provoz a governance</td>
 <td><a href="#k06" data-tab="k06">06-provoz-governance.md</a></td>
-<td>koncept</td>
+<td>hotovo</td>
 </tr>
 <tr>
 <td>7</td>
@@ -337,9 +337,24 @@ Vlastník (dodavatel) bot používá bez omezení.</p>
 <td><code>tools.py:323</code></td>
 </tr>
 <tr>
+<td>Únik přes seznam</td>
+<td><code>list_projects</code> vrátí všechny projekty, klienty a sazby; prompt ho modelu doporučuje volat jako první</td>
+<td><code>tools.py:125-132</code></td>
+</tr>
+<tr>
 <td>Únik přes chybu</td>
 <td>neznámý projekt → hláška vypíše všechny projekty a klienty</td>
 <td><code>tools.py:78-83</code></td>
+</tr>
+<tr>
+<td>Únik přes nejednoznačnost</td>
+<td>částečná shoda názvu → hláška vypíše odpovídající projekty, i cizí</td>
+<td><code>tools.py:84-89</code></td>
+</tr>
+<tr>
+<td>Únik přes prázdný výsledek</td>
+<td>poznámka <code>note</code> uvádí rozsah dat přes všechny klienty; prompt ji modelu velí zopakovat</td>
+<td><code>tools.py:99-118</code></td>
 </tr>
 <tr>
 <td>Telegram</td>
@@ -378,8 +393,8 @@ Vlastník (dodavatel) bot používá bez omezení.</p>
 </tr>
 <tr>
 <td>Systémový prompt</td>
-<td>pravidla proti vymýšlení čísel, nic proti injection ani k důvěrnosti</td>
-<td><code>agent.py:28-49</code></td>
+<td>pravidla proti vymýšlení čísel, nic proti injection ani k důvěrnosti; společný pro agenty HW3</td>
+<td><code>HW3/agents/system_prompt.json</code> (generovaný z <code>HW1/src/timeagent/agent.py</code>)</td>
 </tr>
 <tr>
 <td>Testy</td>
@@ -543,7 +558,7 @@ Vlastník (dodavatel) bot používá bez omezení.</p>
 </tr>
 <tr>
 <td>SQL injection</td>
-<td>parametrizované dotazy, <code>dimension</code> z whitelistu (<code>tools.py:225</code>)</td>
+<td>parametrizované dotazy, <code>dimension</code> z whitelistu (<code>tools.py:201-208</code>, kontrola <code>:219</code>)</td>
 </tr>
 <tr>
 <td>Chybný výpočet faktury modelem</td>
@@ -703,7 +718,7 @@ počítají nástroje.</p>
 Rozdělení rolí v kapitole 6.</p>
 <h2>4.2 M1 · Autorizační gate v MCP serveru</h2>
 <p><strong>Řetězec:</strong> T2 (identita z promptu) → hranice B2 a B3 → gate v MCP serveru →
-testy V1–V12 (kap. 5) → zbytkové riziko níže.</p>
+testy V0–V13 (kap. 5) → zbytkové riziko níže.</p>
 <p><strong>Proč v MCP serveru:</strong> všech pět klientů volá nástroje přes něj. Kontrola
 v n8n by chránila jen Telegram, kontrola v promptu nechrání nic. Gate je
 deterministický kód před SQL dotazem, model ho nemůže přesvědčit.</p>
@@ -753,8 +768,8 @@ deterministický kód před SQL dotazem, model ho nemůže přesvědčit.</p>
 <tbody>
 <tr>
 <td><code>owner</code></td>
-<td>CLI agenti vlastníka, LangFlow vlastníka</td>
-<td>vše jako dnes</td>
+<td>tři frameworkoví agenti a LangFlow vlastníka</td>
+<td>vše jako dnes; po nasazení gate musí každý posílat svůj token (dnes se připojují bez něj)</td>
 </tr>
 <tr>
 <td><code>client-proxy</code></td>
@@ -778,6 +793,10 @@ deterministický kód před SQL dotazem, model ho nemůže přesvědčit.</p>
 </thead>
 <tbody>
 <tr>
+<td><code>tools/list</code></td>
+<td>klient vidí jen nástroje, které smí volat (bez <code>capacity_check</code>)</td>
+</tr>
+<tr>
 <td><code>list_projects</code></td>
 <td>vrátí jen projekty klienta</td>
 </tr>
@@ -792,6 +811,10 @@ deterministický kód před SQL dotazem, model ho nemůže přesvědčit.</p>
 <tr>
 <td><code>capacity_check</code></td>
 <td>zamítnuto, vrací objem přes všechny klienty</td>
+</tr>
+<tr>
+<td>poznámka o prázdném výsledku</td>
+<td>gate nahradí rozsah dat přes všechny klienty rozsahem dat klienta</td>
 </tr>
 </tbody>
 </table></div>
@@ -817,6 +840,9 @@ deterministický kód před SQL dotazem, model ho nemůže přesvědčit.</p>
 <li>Předpoklad: uzel MCP klienta v n8n umí nastavit hlavičku z dat triggeru.
   Ověří se při nasazení. Pokud to nejde, <code>chat_id</code> doplní malý HTTP proxy
   uzel před MCP.</li>
+<li><strong>Gate server nahrazuje původní MCP server z HW3</strong>, nesmí běžet vedle
+  něj. Původní server je bez kontroly volajícího; dokud běží, T4 zůstává
+  otevřené (viz M3).</li>
 </ul>
 <h2>4.3 Ostatní opatření</h2>
 <div class="tbl"><table>
@@ -837,7 +863,7 @@ deterministický kód před SQL dotazem, model ho nemůže přesvědčit.</p>
 </tr>
 <tr>
 <td><strong>M3</strong></td>
-<td>V rozšíření neběží REST API z HW2 ani .NET MCP proxy. MCP port se nepublikuje na hostitele, klienti na hostiteli jdou přes token. Chat webhook n8n <code>public: false</code>.</td>
+<td>V rozšíření neběží původní MCP server z HW3 (nahradí ho server s gate), REST API z HW2 ani .NET MCP proxy. MCP port se nepublikuje na hostitele, klienti na hostiteli jdou přes token. Chat webhook n8n <code>public: false</code>.</td>
 <td>služba, která není v compose, nemá cestu k DB</td>
 <td>kontejner s tokenem <code>owner</code> vidí vše</td>
 </tr>
@@ -936,6 +962,12 @@ dat porovnaný s databází a záznam v auditním logu.</p>
 Globex, Initech, Interní). MCP server s gate běží na localhostu, test volá
 nástroje <strong>skutečným MCP klientem</strong>. Model se nevolá, rozhoduje jen gate.</p>
 <p>Identity v testu: klient A = <code>chat_id</code> přiřazené k Acme, klient B = Northwind.</p>
+<p><strong>V0 je kontrolní případ:</strong> původní server z HW3 bez gate na dotaz „faktura
+Northwind“ data vydá. Únik tedy v datech je a zelené zamítnutí znamená, že
+ho zastavil gate, ne že data chybí.</p>
+<p>Typy: <em>legitimní</em> = klient má dostat data; <em>zakázaný</em> = odpověď nesmí
+obsahovat cizí data. V11 je legitimní dotaz, ale ověřuje filtrování: bez
+gate by seznam obsahoval cizí projekty.</p>
 <div class="tbl"><table>
 <thead>
 <tr>
@@ -971,8 +1003,8 @@ nástroje <strong>skutečným MCP klientem</strong>. Model se nevolá, rozhoduje
 <tr>
 <td>V4</td>
 <td>zakázaný</td>
-<td>klient A, <code>summarize_by(dimension="client")</code> a <code>capacity_check</code></td>
-<td>zamítnuto</td>
+<td>klient A, <code>summarize_by(dimension="client")</code> bez projektu a <code>capacity_check</code></td>
+<td>zamítnuto; <code>capacity_check</code> není ani v <code>tools/list</code></td>
 <td>odpověď bez cizích klientů</td>
 </tr>
 <tr>
@@ -980,7 +1012,7 @@ nástroje <strong>skutečným MCP klientem</strong>. Model se nevolá, rozhoduje
 <td>zakázaný</td>
 <td>klient A, neexistující projekt</td>
 <td>zamítnuto</td>
-<td>hláška nevypíše žádný cizí projekt (dnes je vypíše, <code>tools.py:78-83</code>)</td>
+<td>hláška nevypíše žádný cizí projekt (bez gate je vypíše, <code>tools.py:78-83</code>)</td>
 </tr>
 <tr>
 <td>V6</td>
@@ -1031,6 +1063,13 @@ nástroje <strong>skutečným MCP klientem</strong>. Model se nevolá, rozhoduje
 <td>další volání zamítnuto, bez restartu</td>
 <td>žádná data po revokaci</td>
 </tr>
+<tr>
+<td>V13</td>
+<td>zakázaný</td>
+<td>klient A, vlastní projekt za měsíc bez dat</td>
+<td>povoleno, nula a poznámka</td>
+<td>poznámka uvádí rozsah dat jen z projektů Acme, ne datum záznamu Northwindu mimo něj</td>
+</tr>
 </tbody>
 </table></div>
 <p><strong>Proč to odpovídá hrozbě:</strong> T2 je únik dat jiného klienta. Test proto
@@ -1050,49 +1089,49 @@ výsledku), ne jen návratový kód. Nástroje jsou read-only, takže zakázaný
 </thead>
 <tbody>
 <tr>
-<td>V13</td>
+<td>V14</td>
 <td>M2</td>
 <td>zpráva z účtu mimo allowlist</td>
 <td>zpráva z povoleného účtu</td>
 <td>cizí bez odpovědi, v n8n běh končí v uzlu Allowlist; povolený dostane odpověď</td>
 </tr>
 <tr>
-<td>V14</td>
+<td>V15</td>
 <td>M2</td>
 <td>15 zpráv za minutu</td>
 <td>3 zprávy</td>
 <td>od 11. zprávy zahozeno</td>
 </tr>
 <tr>
-<td>V15</td>
+<td>V16</td>
 <td>M3</td>
-<td><code>curl</code> na MCP z hostitele bez tokenu; port REST API</td>
+<td><code>curl</code> na MCP z hostitele bez tokenu; port REST API; port původního MCP serveru HW3</td>
 <td>volání přes n8n</td>
 <td>401 / spojení odmítnuto; n8n funguje</td>
 </tr>
 <tr>
-<td>V16</td>
+<td>V17</td>
 <td>M4</td>
 <td>přihlášení do n8n výchozím heslem; LangFlow bez přihlášení; Code node čte <code>$env</code></td>
 <td>přihlášení správným heslem</td>
 <td>odmítnuto ve všech třech</td>
 </tr>
 <tr>
-<td>V17</td>
+<td>V18</td>
 <td>M5</td>
 <td><code>OLLAMA_BASE_URL</code> na veřejnou adresu</td>
 <td>adresa v docker síti</td>
 <td>klient nenastartuje / nastartuje</td>
 </tr>
 <tr>
-<td>V18</td>
+<td>V19</td>
 <td>M6</td>
 <td>CSV s popisem 5 000 znaků a s instrukcí</td>
 <td>běžný export</td>
 <td>popis zkrácen; přes M1 se instrukce neprojeví mimo data klienta</td>
 </tr>
 <tr>
-<td>V19</td>
+<td>V20</td>
 <td>M7</td>
 <td>běh starší 14 dní</td>
 <td>běh dnes</td>
@@ -1111,11 +1150,11 @@ výsledku), ne jen návratový kód. Nástroje jsou read-only, takže zakázaný
 <tbody>
 <tr>
 <td>M1</td>
-<td><strong>získá se v kap. 7</strong>: výstup testu V1–V12</td>
+<td><strong>získáno v kap. 7</strong>: výstup testu V0–V13 a běh s vypnutým gate</td>
 </tr>
 <tr>
 <td>M2–M7</td>
-<td>plánovaná, ověří se při nasazení na Proxmox podle V13–V19</td>
+<td>plánovaná, ověří se při nasazení na Proxmox podle V14–V20</td>
 </tr>
 </tbody>
 </table></div>
@@ -1266,7 +1305,7 @@ nevrátil.</p>
 <ul>
 <li>Politika, kód gate i compose jsou v gitu. Změnu politiky (nový klient)
   dělá vlastník commitem.</li>
-<li><strong>Test gate (V0–V12) musí projít před každou změnou</strong> nástrojů, gate nebo
+<li><strong>Test gate (V0–V13) musí projít před každou změnou</strong> nástrojů, gate nebo
   MCP serveru. Neprošlý test blokuje nasazení.</li>
 <li>Nový nástroj je pro klienty zakázaný, dokud se výslovně nepřidá do
   <code>CLIENT_TOOLS</code> s testem.</li>
@@ -1310,12 +1349,12 @@ nevrátil.</p>
 </thead>
 <tbody>
 <tr>
-<td>Test gate V0–V12</td>
-<td>2026-10-14, 13/13 prošlo</td>
+<td>Test gate V0–V13</td>
+<td>2026-10-14, 14/14 prošlo; s vypnutým gate 9 padá</td>
 <td>při každé změně, minimálně před nasazením</td>
 </tr>
 <tr>
-<td>Ruční ověření V13–V19</td>
+<td>Ruční ověření V14–V20</td>
 <td>zatím nezískáno</td>
 <td>při nasazení na Proxmox</td>
 </tr>
@@ -1366,7 +1405,7 @@ MCP klientem přes HTTP. Model se nevolá.</p>
 </tr>
 <tr>
 <td>V4</td>
-<td><code>1001</code>, <code>summarize_by(dimension="client")</code>; <code>capacity_check</code></td>
+<td><code>1001</code>, <code>summarize_by(dimension="client")</code> bez projektu; <code>capacity_check</code></td>
 <td>obojí zamítnuto</td>
 </tr>
 <tr>
@@ -1411,6 +1450,29 @@ MCP klientem přes HTTP. Model se nevolá.</p>
 </tr>
 </tbody>
 </table></div>
+<p><strong>Doplněno po kontrole (2026-10-14), zapsáno před opravou gate:</strong> kontrola
+našla další cestu úniku a dvě nepřesnosti v testu.</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Případ</th>
+<th>Očekávám</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V13</td>
+<td><code>1001</code>, <code>compute_invoice(ACME, 2026-09)</code>; v DB je záznam Northwindu z 2026-09-30, Acme má data jen do srpna</td>
+<td>povoleno, 0 hodin; <code>note</code> uvádí rozsah dat Acme, ne <code>2026-09-30</code></td>
+</tr>
+<tr>
+<td>V4</td>
+<td>navíc <code>tools/list</code> pro <code>1001</code></td>
+<td><code>capacity_check</code> v seznamu není</td>
+</tr>
+</tbody>
+</table></div>
 <h2>7.3 Implementace</h2>
 <p>Nový server v <code>security/</code>, HW1–HW3 se nemění. Z HW3 přebírá seznam nástrojů
 a health check, nástroje volá stejně jako HW3 (<code>tools.call_tool</code>).</p>
@@ -1428,7 +1490,7 @@ a health check, nástroje volá stejně jako HW3 (<code>tools.call_tool</code>).
 </tr>
 <tr>
 <td><code>src/timeagent_gate/gate.py</code></td>
-<td>rozhodnutí podle role a nástroje, projekt klienta jen mezi jeho projekty, zúžení <code>list_projects</code>, auditní log</td>
+<td>rozhodnutí podle role a nástroje, projekt klienta jen mezi jeho projekty, zúžení <code>list_projects</code>, <code>tools/list</code> a poznámky o prázdném výsledku, auditní log</td>
 </tr>
 <tr>
 <td><code>src/timeagent_gate/server.py</code></td>
@@ -1440,17 +1502,21 @@ a health check, nástroje volá stejně jako HW3 (<code>tools.call_tool</code>).
 </tr>
 <tr>
 <td><code>tests/conftest.py</code></td>
-<td>seed DB + projekt <code>ACM2</code>, politika s náhodnými tokeny, server na volném portu</td>
+<td>seed DB + projekt <code>ACM2</code> + záznam Northwindu mimo rozsah Acme, politika s náhodnými tokeny, server na volném portu, přepínač <code>--gate-off</code></td>
 </tr>
 <tr>
 <td><code>tests/test_gate.py</code></td>
-<td>případy V0–V12</td>
+<td>případy V0–V13</td>
 </tr>
 </tbody>
 </table></div>
 <p>Gate klientovi předá nástroji už rozpoznané <code>id</code> projektu. Částečná shoda
 názvu v <code>tools._resolve_project</code> tak nemůže trefit cizí projekt a chybová
 hláška knihovny se k cizím projektům vůbec nedostane.</p>
+<p>Knihovna při prázdném výsledku přidá poznámku s rozsahem dat přes celou
+databázi (<code>tools.py:99-118</code>) a systémový prompt modelu velí ji zopakovat.
+Klient by tak zjistil, do kdy se pracovalo pro jiné. Gate proto poznámku
+pro klienta nahradí rozsahem jeho vlastních dat.</p>
 <h2>7.4 Spuštění</h2>
 <pre><code class="language-bash">cd security
 uv sync
@@ -1461,26 +1527,27 @@ několik minut. Test nepotřebuje model, Docker ani síť mimo localhost.</p>
 <h2>7.5 Skutečný výstup</h2>
 <p>Běh 2026-10-14, Windows 11, Python 3.12.13:</p>
 <pre><code class="language-text">tests/test_gate.py::test_v0_bez_gate_cizi_data_uniknou PASSED            [  7%]
-tests/test_gate.py::test_v1_klient_dostane_fakturu_za_vlastni_projekt PASSED [ 15%]
-tests/test_gate.py::test_v2_cizi_projekt_je_zamitnut_bez_cizich_dat PASSED [ 23%]
-tests/test_gate.py::test_v3_dotaz_bez_projektu_nesecte_vsechny_klienty PASSED [ 30%]
-tests/test_gate.py::test_v4_souhrn_pres_klienty_a_kapacita_jsou_zamitnuty PASSED [ 38%]
-tests/test_gate.py::test_v5_neexistujici_projekt_nevypise_cizi_projekty PASSED [ 46%]
-tests/test_gate.py::test_v6_identita_v_argumentu_se_ignoruje PASSED      [ 53%]
-tests/test_gate.py::test_v7_neznamy_nebo_chybejici_chat_id PASSED        [ 61%]
-tests/test_gate.py::test_v8_bez_tokenu_a_se_spatnym_tokenem_401 PASSED   [ 69%]
-tests/test_gate.py::test_v9_bez_politiky_vse_zamitnuto PASSED            [ 76%]
-tests/test_gate.py::test_v10_vlastnik_vidi_vse_jako_bez_gate PASSED      [ 84%]
-tests/test_gate.py::test_v11_seznam_projektu_jen_vlastni PASSED          [ 92%]
-tests/test_gate.py::test_v12_revokace_plati_hned PASSED                  [100%]
+tests/test_gate.py::test_v1_klient_dostane_fakturu_za_vlastni_projekt PASSED [ 14%]
+tests/test_gate.py::test_v2_cizi_projekt_je_zamitnut_bez_cizich_dat PASSED [ 21%]
+tests/test_gate.py::test_v3_dotaz_bez_projektu_nesecte_vsechny_klienty PASSED [ 28%]
+tests/test_gate.py::test_v4_souhrn_pres_klienty_a_kapacita_jsou_zamitnuty PASSED [ 35%]
+tests/test_gate.py::test_v5_neexistujici_projekt_nevypise_cizi_projekty PASSED [ 42%]
+tests/test_gate.py::test_v6_identita_v_argumentu_se_ignoruje PASSED      [ 50%]
+tests/test_gate.py::test_v7_neznamy_nebo_chybejici_chat_id PASSED        [ 57%]
+tests/test_gate.py::test_v8_bez_tokenu_a_se_spatnym_tokenem_401 PASSED   [ 64%]
+tests/test_gate.py::test_v9_bez_politiky_vse_zamitnuto PASSED            [ 71%]
+tests/test_gate.py::test_v10_vlastnik_vidi_vse_jako_bez_gate PASSED      [ 78%]
+tests/test_gate.py::test_v11_seznam_projektu_jen_vlastni PASSED          [ 85%]
+tests/test_gate.py::test_v12_revokace_plati_hned PASSED                  [ 92%]
+tests/test_gate.py::test_v13_prazdny_vysledek_neprozradi_rozsah_cizich_dat PASSED [100%]
 
-============================= 13 passed in 0.72s ==============================
+============================= 14 passed in 1.62s ==============================
 </code></pre>
 <p>Auditní záznamy z V2 (klient Acme žádá fakturu Northwindu id i názvem):</p>
 <pre><code class="language-json">{&quot;ts&quot;: &quot;2026-10-14T15:37:21.495+00:00&quot;, &quot;service&quot;: &quot;n8n-telegram&quot;, &quot;role&quot;: &quot;client-proxy&quot;, &quot;chat_id&quot;: &quot;1001&quot;, &quot;client&quot;: &quot;Acme Corp&quot;, &quot;tool&quot;: &quot;compute_invoice&quot;, &quot;arguments&quot;: {&quot;project&quot;: &quot;NWND&quot;, &quot;month&quot;: &quot;2026-08&quot;}, &quot;decision&quot;: &quot;deny&quot;, &quot;reason&quot;: &quot;project_not_allowed&quot;}
 {&quot;ts&quot;: &quot;2026-10-14T15:37:21.509+00:00&quot;, &quot;service&quot;: &quot;n8n-telegram&quot;, &quot;role&quot;: &quot;client-proxy&quot;, &quot;chat_id&quot;: &quot;1001&quot;, &quot;client&quot;: &quot;Acme Corp&quot;, &quot;tool&quot;: &quot;compute_invoice&quot;, &quot;arguments&quot;: {&quot;project&quot;: &quot;Northwind&quot;, &quot;month&quot;: &quot;2026-08&quot;}, &quot;decision&quot;: &quot;deny&quot;, &quot;reason&quot;: &quot;project_not_allowed&quot;}
 </code></pre>
-<p><strong>Shoda s očekáváním (7.2):</strong> všech dvanáct případů V1–V12 dopadlo tak, jak
+<p><strong>Shoda s očekáváním (7.2):</strong> všech třináct případů V1–V13 dopadlo tak, jak
 bylo zapsáno předem.</p>
 <h3>Kontrola, že test opravdu testuje gate</h3>
 <p>Zelený test sám nedokazuje, že kontrolu vykonává gate. Data by mohla chybět
@@ -1489,17 +1556,23 @@ z jiného důvodu. Proto dvě kontroly navíc, doplněné po prvním běhu:</p>
 <li><strong>V0, kontrolní případ bez gate:</strong> původní server z HW3 na stejný dotaz
    („faktura Northwind“) vydá data Northwindu bez jakékoli identity. Únik
    z T2 tedy v datech skutečně je.</li>
-<li><strong>Běh s vypnutým gate:</strong> jednorázový pytest plugin nahradil <code>authorize</code>
-   funkcí, která vše povolí. Výsledek: <code>8 failed, 5 passed</code>. Padly všechny
-   zakázané případy V2–V7, V11 a V12, s cizími daty přímo ve výstupu:</li>
+<li><strong>Běh s vypnutým gate:</strong> přepínač <code>--gate-off</code> (v <code>tests/conftest.py</code>)
+   nahradí rozhodnutí gate funkcí, která vše povolí, a vypne filtrování
+   výstupu. Spuštění:</li>
 </ol>
+<p><code>bash
+   uv run pytest --gate-off</code></p>
+<p>Výsledek: <code>9 failed, 5 passed</code>. Padly všechny případy, kde má gate
+   zastavit cizí data (V2–V7, V11–V13), s cizími daty přímo ve výstupu:</p>
 <p><code>text
    FAILED test_v2 … {'project': 'NWND', … 'client': 'Northwind Trading', …}
-   FAILED test_v4 … {'dimension': 'client', … 'total_hours': 215.0, …}
+   FAILED test_v4 … {'dimension': 'client', 'date_from': '2026-05-01', 'date_to': '2026-08-31', 'total_hours': 619.0, …}
    FAILED test_v5 … 'Projekt 'XYZ' neexistuje. Dostupné: ACME (Acme Corp), NWND (Northwind Trading), GLBX (Globex), INIT (Initech), …'
-   FAILED test_v11 … Extra items in the left set: 'INIT', …</code></p>
-<p>Prošly legitimní případy V0, V1, V10 a případy V8 a V9, které hlídá
-   samostatná vrstva před <code>/mcp</code>, ne <code>authorize</code>.</p>
+   FAILED test_v11 … Extra items in the left set: 'INIT', …
+   FAILED test_v13 … 'Data jsou k dispozici od 2026-05-01 do 2026-09-30. …'</code></p>
+<p>V4 bez gate vrátí souhrn hodin přes všechny klienty. Prošly legitimní
+   případy V0, V1, V10 a případy V8 a V9, které hlídá samostatná vrstva
+   před <code>/mcp</code>, ne gate.</p>
 <h2>7.6 Proč důkaz odpovídá hrozbě</h2>
 <p>T2 je únik dat jiného klienta, ke kterému dojde, protože identitu určuje
 text zprávy. Test proto:</p>
@@ -1524,7 +1597,12 @@ text zprávy. Test proto:</p>
 <li><strong>Model:</strong> chování modelu se netestuje vůbec. Injection (T3) uvnitř dat
   téhož klienta zůstává.</li>
 <li><strong>Kompromitace n8n nebo tokenu <code>owner</code>:</strong> gate jim věří.</li>
-<li><strong>Ostatní mitigace M2–M7:</strong> jen plán ověření V13–V19.</li>
+<li><strong>Ostatní mitigace M2–M7:</strong> jen plán ověření V14–V20.</li>
+<li><strong>Souběh s původním serverem:</strong> gate chrání jen tehdy, když server z HW3
+  bez gate neběží (M3, ověří V16).</li>
+<li><strong>Tokeny agentů a LangFlow:</strong> dnes se k MCP připojují bez tokenu. Po
+  nasazení gate musí každý posílat svůj token s rolí <code>owner</code>, jinak dostane
+  401. Konfiguraci klientů test neověřuje.</li>
 <li><strong>REST API z HW2 a .NET proxy:</strong> gate je nechrání, v rozšíření nemají běžet (M3).</li>
 <li><strong>Integrita auditního logu:</strong> zápis je jen append do souboru, bez ochrany
   proti přepsání.</li>

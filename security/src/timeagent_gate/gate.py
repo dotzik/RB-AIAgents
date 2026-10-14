@@ -102,14 +102,45 @@ def authorize(identity: Identity | None, name: str, arguments: dict[str, Any]) -
     return Decision(True, "client_scoped", args)
 
 
+def _own_empty_note(client: str) -> str:
+    """Totéž co `tools._empty_note`, ale rozsah dat jen z projektů klienta."""
+    with closing(db.connect_ro()) as conn:
+        row = conn.execute(
+            "SELECT MIN(e.date) AS od, MAX(e.date) AS do FROM time_entries e "
+            "JOIN projects p ON p.id = e.project_id WHERE p.client = ?",
+            (client,),
+        ).fetchone()
+    if not row or not row["od"]:
+        return "Pro vaše projekty nejsou v databázi žádné výkazy."
+    return (
+        "Za zadané období nejsou v databázi žádné záznamy. "
+        f"Data jsou k dispozici od {row['od']} do {row['do']}. "
+        "Neodhaduj chybějící hodnoty — odpověz, že za dané období záznamy nejsou."
+    )
+
+
 def filter_result(identity: Identity | None, name: str, result: dict[str, Any]) -> dict[str, Any]:
-    """Zúží výstup `list_projects` na projekty klienta."""
-    if identity is None or identity.role == "owner" or name != "list_projects":
+    """Zúží výstup pro klienta: `list_projects` na jeho projekty a poznámku
+    o prázdném výsledku na rozsah jeho dat (globální rozsah prozradí, kdy
+    se pracovalo pro jiné klienty)."""
+    if identity is None or identity.role == "owner":
         return result
-    if "projects" not in result:
-        return result
-    own = [p for p in result["projects"] if p.get("client") == identity.client]
-    return {**result, "count": len(own), "projects": own}
+    if name == "list_projects" and "projects" in result:
+        own = [p for p in result["projects"] if p.get("client") == identity.client]
+        return {**result, "count": len(own), "projects": own}
+    if "note" in result:
+        with closing(db.connect_ro()) as conn:
+            global_note = tools._empty_note(conn)
+        if result["note"] == global_note:
+            return {**result, "note": _own_empty_note(identity.client)}
+    return result
+
+
+def visible_tools(identity: Identity | None, names: list[str]) -> list[str]:
+    """Které nástroje uvidí volající v `tools/list`."""
+    if identity is not None and identity.role == "owner":
+        return names
+    return [n for n in names if n in CLIENT_TOOLS]
 
 
 def audit(identity: Identity | None, tool: str | None, arguments: Any, allowed: bool, reason: str) -> None:

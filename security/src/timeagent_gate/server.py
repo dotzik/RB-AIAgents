@@ -20,7 +20,7 @@ from starlette.routing import Route
 from timeagent import tools
 from timeagent_mcp.server import DEFAULT_ALLOWED_HOSTS, TOOLS, health
 
-from .gate import audit, authorize, filter_result
+from .gate import audit, authorize, filter_result, visible_tools
 from .policy import Identity, PolicyError, load_policy, resolve_identity
 
 SERVER_NAME = "timeagent"
@@ -47,7 +47,11 @@ def _identity(ctx: ServerRequestContext[Any]) -> Identity | None:
 async def on_list_tools(
     ctx: ServerRequestContext[Any], params: types.PaginatedRequestParams | None
 ) -> types.ListToolsResult:
-    return types.ListToolsResult(tools=TOOLS)
+    try:
+        allowed = set(visible_tools(_identity(ctx), [t.name for t in TOOLS]))
+    except Exception:  # noqa: BLE001 — chyba = žádné nástroje (fail closed)
+        allowed = set()
+    return types.ListToolsResult(tools=[t for t in TOOLS if t.name in allowed])
 
 
 async def on_call_tool(

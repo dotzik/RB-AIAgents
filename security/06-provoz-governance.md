@@ -56,7 +56,7 @@ nevrátil.
 
 - Politika, kód gate i compose jsou v gitu. Změnu politiky (nový klient)
   dělá vlastník commitem.
-- **Test gate (V0–V12) musí projít před každou změnou** nástrojů, gate nebo
+- **Test gate (V0–V13) musí projít před každou změnou** nástrojů, gate nebo
   MCP serveru. Neprošlý test blokuje nasazení.
 - Nový nástroj je pro klienty zakázaný, dokud se výslovně nepřidá do
   `CLIENT_TOOLS` s testem.
@@ -74,6 +74,6 @@ nevrátil.
 
 | Důkaz | Stav | Kdy obnovit |
 |---|---|---|
-| Test gate V0–V12 | 2026-10-14, 13/13 prošlo | při každé změně, minimálně před nasazením |
-| Ruční ověření V13–V19 | zatím nezískáno | při nasazení na Proxmox |
+| Test gate V0–V13 | 2026-10-14, 14/14 prošlo; s vypnutým gate 9 padá | při každé změně, minimálně před nasazením |
+| Ruční ověření V14–V20 | zatím nezískáno | při nasazení na Proxmox |
 | Revize threat modelu | 2026-10-14 | při přidání nového zdroje dat, nového kanálu nebo při publikování mimo domácí síť |
