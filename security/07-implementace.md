@@ -44,6 +44,21 @@ našla další cestu úniku a dvě nepřesnosti v testu.
 | V13 | `1001`, `compute_invoice(ACME, 2026-09)`; v DB je záznam Northwindu z 2026-09-30, Acme má data jen do srpna | povoleno, 0 hodin; `note` uvádí rozsah dat Acme, ne `2026-09-30` |
 | V4 | navíc `tools/list` pro `1001` | `capacity_check` v seznamu není |
 
+**Doplněno po kontrole logiky (2026-10-15), zapsáno před úpravou gate:**
+kontrola našla tři mezery v návrhu. V Telegram skupině je `chat.id` id
+skupiny, takže data klienta by viděli všichni její členové. Vlastník by po
+nasazení gate přes Telegram nedostal nic, protože služba `n8n-telegram` má
+jen roli `client-proxy`. Bez nastaveného auditního logu gate tiše neloguje.
+Čísla V21–V25 navazují na ruční ověření V14–V20 (kap. 5.2).
+
+| # | Případ | Očekávám |
+|---|---|---|
+| V21 | `1001` s typem chatu `group`, `supergroup`, `channel` nebo bez typu | zamítnuto `chat_not_private`, žádná data; s `private` povoleno |
+| V22 | `chat_id 7007` z `owner_chat_ids`, soukromý chat, `compute_invoice(NWND)` a `capacity_check` | povoleno, výsledek shodný s přímým voláním; audit `role: owner`, `chat_id: 7007` |
+| V23 | `7007` ze skupiny | zamítnuto `chat_not_private` |
+| V24 | `TIMEAGENT_AUDIT_LOG` není nastavený | HTTP 503 na každý požadavek, nástroj neběží |
+| V25 | `1001`, `compute_invoice("Acme —")` (část názvu sedí na `ACME` i `ACM2`) | zamítnuto `project_ambiguous`, nabídne oba vlastní projekty, žádná cizí data |
+
 ## 7.3 Implementace
 
 Nový server v `security/`, HW1–HW3 se nemění. Z HW3 přebírá seznam nástrojů
@@ -51,12 +66,12 @@ a health check, nástroje volá stejně jako HW3 (`tools.call_tool`).
 
 | Soubor | Co dělá |
 |---|---|
-| `src/timeagent_gate/policy.py` | načte politiku (TOML), ověří token (SHA-256, `hmac.compare_digest`), odvodí identitu z hlaviček |
-| `src/timeagent_gate/gate.py` | rozhodnutí podle role a nástroje, projekt klienta jen mezi jeho projekty, zúžení `list_projects`, `tools/list` a poznámky o prázdném výsledku, auditní log |
-| `src/timeagent_gate/server.py` | ASGI vrstva před `/mcp` (401 bez tokenu, 503 bez politiky) a gate v `on_call_tool` |
+| `src/timeagent_gate/policy.py` | načte politiku (TOML), ověří token (SHA-256, `hmac.compare_digest`), odvodí identitu z hlaviček; identitu uzná jen ze soukromého chatu, `owner_chat_ids` → role `owner` |
+| `src/timeagent_gate/gate.py` | rozhodnutí podle role a nástroje, projekt klienta jen mezi jeho projekty, zúžení `list_projects`, `tools/list` a poznámky o prázdném výsledku, povinný auditní log |
+| `src/timeagent_gate/server.py` | ASGI vrstva před `/mcp` (401 bez tokenu, 503 bez politiky nebo bez auditu) a gate v `on_call_tool` |
 | `access.example.toml` | vzor politiky; skutečný `access.toml` je v `.gitignore` |
 | `tests/conftest.py` | seed DB + projekt `ACM2` + záznam Northwindu mimo rozsah Acme, politika s náhodnými tokeny, server na volném portu, přepínač `--gate-off` |
-| `tests/test_gate.py` | případy V0–V13 |
+| `tests/test_gate.py` | případy V0–V13 a V21–V25 |
 
 Gate klientovi předá nástroji už rozpoznané `id` projektu. Částečná shoda
 názvu v `tools._resolve_project` tak nemůže trefit cizí projekt a chybová
@@ -80,36 +95,52 @@ několik minut. Test nepotřebuje model, Docker ani síť mimo localhost.
 
 ## 7.5 Skutečný výstup
 
-Běh 2026-10-14, Windows 11, Python 3.12.13:
+Běh 2026-10-15, Windows 11, Python 3.12.13:
 
 ```text
-tests/test_gate.py::test_v0_bez_gate_cizi_data_uniknou PASSED            [  7%]
-tests/test_gate.py::test_v1_klient_dostane_fakturu_za_vlastni_projekt PASSED [ 14%]
-tests/test_gate.py::test_v2_cizi_projekt_je_zamitnut_bez_cizich_dat PASSED [ 21%]
-tests/test_gate.py::test_v3_dotaz_bez_projektu_nesecte_vsechny_klienty PASSED [ 28%]
-tests/test_gate.py::test_v4_souhrn_pres_klienty_a_kapacita_jsou_zamitnuty PASSED [ 35%]
-tests/test_gate.py::test_v5_neexistujici_projekt_nevypise_cizi_projekty PASSED [ 42%]
-tests/test_gate.py::test_v6_identita_v_argumentu_se_ignoruje PASSED      [ 50%]
-tests/test_gate.py::test_v7_neznamy_nebo_chybejici_chat_id PASSED        [ 57%]
-tests/test_gate.py::test_v8_bez_tokenu_a_se_spatnym_tokenem_401 PASSED   [ 64%]
-tests/test_gate.py::test_v9_bez_politiky_vse_zamitnuto PASSED            [ 71%]
-tests/test_gate.py::test_v10_vlastnik_vidi_vse_jako_bez_gate PASSED      [ 78%]
-tests/test_gate.py::test_v11_seznam_projektu_jen_vlastni PASSED          [ 85%]
-tests/test_gate.py::test_v12_revokace_plati_hned PASSED                  [ 92%]
-tests/test_gate.py::test_v13_prazdny_vysledek_neprozradi_rozsah_cizich_dat PASSED [100%]
+tests/test_gate.py::test_v0_bez_gate_cizi_data_uniknou PASSED            [  5%]
+tests/test_gate.py::test_v1_klient_dostane_fakturu_za_vlastni_projekt PASSED [ 10%]
+tests/test_gate.py::test_v2_cizi_projekt_je_zamitnut_bez_cizich_dat PASSED [ 15%]
+tests/test_gate.py::test_v3_dotaz_bez_projektu_nesecte_vsechny_klienty PASSED [ 21%]
+tests/test_gate.py::test_v4_souhrn_pres_klienty_a_kapacita_jsou_zamitnuty PASSED [ 26%]
+tests/test_gate.py::test_v5_neexistujici_projekt_nevypise_cizi_projekty PASSED [ 31%]
+tests/test_gate.py::test_v6_identita_v_argumentu_se_ignoruje PASSED      [ 36%]
+tests/test_gate.py::test_v7_neznamy_nebo_chybejici_chat_id PASSED        [ 42%]
+tests/test_gate.py::test_v8_bez_tokenu_a_se_spatnym_tokenem_401 PASSED   [ 47%]
+tests/test_gate.py::test_v9_bez_politiky_vse_zamitnuto PASSED            [ 52%]
+tests/test_gate.py::test_v10_vlastnik_vidi_vse_jako_bez_gate PASSED      [ 57%]
+tests/test_gate.py::test_v11_seznam_projektu_jen_vlastni PASSED          [ 63%]
+tests/test_gate.py::test_v12_revokace_plati_hned PASSED                  [ 68%]
+tests/test_gate.py::test_v13_prazdny_vysledek_neprozradi_rozsah_cizich_dat PASSED [ 73%]
+tests/test_gate.py::test_v21_identitu_uzna_jen_soukromy_chat PASSED      [ 78%]
+tests/test_gate.py::test_v22_vlastnik_pres_telegram_vidi_vse PASSED      [ 84%]
+tests/test_gate.py::test_v23_vlastnik_ve_skupine_je_zamitnut PASSED      [ 89%]
+tests/test_gate.py::test_v24_bez_auditu_nic_nevyda PASSED                [ 94%]
+tests/test_gate.py::test_v25_nejednoznacny_nazev_jen_mezi_vlastnimi PASSED [100%]
 
-============================= 14 passed in 1.62s ==============================
+============================= 19 passed in 1.41s ==============================
 ```
 
 Auditní záznamy z V2 (klient Acme žádá fakturu Northwindu id i názvem):
 
 ```json
-{"ts": "2026-10-14T15:37:21.495+00:00", "service": "n8n-telegram", "role": "client-proxy", "chat_id": "1001", "client": "Acme Corp", "tool": "compute_invoice", "arguments": {"project": "NWND", "month": "2026-08"}, "decision": "deny", "reason": "project_not_allowed"}
-{"ts": "2026-10-14T15:37:21.509+00:00", "service": "n8n-telegram", "role": "client-proxy", "chat_id": "1001", "client": "Acme Corp", "tool": "compute_invoice", "arguments": {"project": "Northwind", "month": "2026-08"}, "decision": "deny", "reason": "project_not_allowed"}
+{"ts": "2026-10-15T16:37:23.261+00:00", "service": "n8n-telegram", "role": "client-proxy", "chat_id": "1001", "client": "Acme Corp", "chat_type": "private", "tool": "compute_invoice", "arguments": {"project": "NWND", "month": "2026-08"}, "decision": "deny", "reason": "project_not_allowed"}
+{"ts": "2026-10-15T16:37:23.291+00:00", "service": "n8n-telegram", "role": "client-proxy", "chat_id": "1001", "client": "Acme Corp", "chat_type": "private", "tool": "compute_invoice", "arguments": {"project": "Northwind", "month": "2026-08"}, "decision": "deny", "reason": "project_not_allowed"}
 ```
 
-**Shoda s očekáváním (7.2):** všech třináct případů V1–V13 dopadlo tak, jak
-bylo zapsáno předem.
+Z V21 (týž klient ze skupiny, potom ze soukromého chatu) a V22 (vlastník
+přes Telegram):
+
+```json
+{"ts": "2026-10-15T16:37:23.353+00:00", "service": "n8n-telegram", "role": "client-proxy", "chat_id": "1001", "client": null, "chat_type": "group", "tool": "compute_invoice", "arguments": {"project": "ACME", "month": "2026-08"}, "decision": "deny", "reason": "chat_not_private"}
+{"ts": "2026-10-15T16:37:23.493+00:00", "service": "n8n-telegram", "role": "client-proxy", "chat_id": "1001", "client": "Acme Corp", "chat_type": "private", "tool": "compute_invoice", "arguments": {"project": "ACME", "month": "2026-08"}, "decision": "allow", "reason": "client_scoped"}
+{"ts": "2026-10-15T16:37:23.591+00:00", "service": "n8n-telegram", "role": "owner", "chat_id": "7007", "client": null, "chat_type": "private", "tool": "capacity_check", "arguments": {"month": "2026-08"}, "decision": "allow", "reason": "owner"}
+```
+
+**Shoda s očekáváním (7.2):** všech osmnáct případů V1–V13 a V21–V25
+dopadlo tak, jak bylo zapsáno předem. U V25 se očekávání opravilo ještě
+před spuštěním: `"Acme"` se shoduje s id `ACME` (bez ohledu na velikost
+písmen), nejednoznačný je až `"Acme —"`.
 
 ### Kontrola, že test opravdu testuje gate
 
@@ -127,8 +158,8 @@ z jiného důvodu. Proto dvě kontroly navíc, doplněné po prvním běhu:
    uv run pytest --gate-off
    ```
 
-   Výsledek: `9 failed, 5 passed`. Padly všechny případy, kde má gate
-   zastavit cizí data (V2–V7, V11–V13), s cizími daty přímo ve výstupu:
+   Výsledek: `12 failed, 7 passed`. Padly všechny případy, kde má gate
+   zastavit data (V2–V7, V11–V13, V21, V23, V25), s daty přímo ve výstupu:
 
    ```text
    FAILED test_v2 … {'project': 'NWND', … 'client': 'Northwind Trading', …}
@@ -136,11 +167,15 @@ z jiného důvodu. Proto dvě kontroly navíc, doplněné po prvním běhu:
    FAILED test_v5 … 'Projekt 'XYZ' neexistuje. Dostupné: ACME (Acme Corp), NWND (Northwind Trading), GLBX (Globex), INIT (Initech), …'
    FAILED test_v11 … Extra items in the left set: 'INIT', …
    FAILED test_v13 … 'Data jsou k dispozici od 2026-05-01 do 2026-09-30. …'
+   FAILED test_v21 … group … {'project': 'ACME', … 'client': 'Acme Corp', 'month': '2026-08', …}
+   FAILED test_v23 … {'project': 'NWND', … 'client': 'Northwind Trading', …}
    ```
 
-   V4 bez gate vrátí souhrn hodin přes všechny klienty. Prošly legitimní
-   případy V0, V1, V10 a případy V8 a V9, které hlídá samostatná vrstva
-   před `/mcp`, ne gate.
+   V4 bez gate vrátí souhrn hodin přes všechny klienty, V21 vydá fakturu
+   Acme do skupiny. V25 bez gate padá na chybějícím zamítnutí, ne na úniku:
+   hláška knihovny o nejednoznačnosti tu náhodou vypíše jen projekty Acme.
+   Prošly legitimní případy V0, V1, V10, V22 a případy V8, V9 a V24, které
+   hlídá samostatná vrstva před `/mcp`, ne gate.
 
 ## 7.6 Proč důkaz odpovídá hrozbě
 
@@ -157,12 +192,18 @@ text zprávy. Test proto:
 - jde přes **skutečný MCP protokol přes HTTP**, stejnou cestou jako n8n
   a ostatní klienti. Proto pokrývá i T4: bez tokenu se k nástroji nedostane
   nikdo (V8);
-- ověřuje **fail closed** (V9) a **revokaci bez restartu** (V12).
+- uzná identitu **jen ze soukromého chatu** (V21, V23), protože ve skupině
+  `chat.id` neoznačuje člověka;
+- ověřuje **fail closed** (V9, V24: bez politiky nebo bez auditu se nevydá
+  nic) a **revokaci bez restartu** (V12).
 
 ## 7.7 Co tento důkaz nepokrývá
 
-- **n8n:** že workflow skutečně posílá `chat.id` v hlavičce a že MCP uzel
-  hlavičku z dat triggeru umí nastavit. Ověří se při nasazení (kap. 4.2).
+- **n8n:** že workflow skutečně posílá `chat.id` a `chat.type` v hlavičkách
+  a že MCP uzel hlavičky z dat triggeru umí nastavit. Ověří se při nasazení
+  (kap. 4.2, V14).
+- **Oprávnění jednotlivých osob:** gate rozlišuje klienty, ne lidi uvnitř
+  klienta (kap. 1.4).
 - **Telegram:** pravost `chat.id` stojí na důvěře v Telegram API a v bot token.
 - **Model:** chování modelu se netestuje vůbec. Injection (T3) uvnitř dat
   téhož klienta zůstává.
@@ -175,4 +216,5 @@ text zprávy. Test proto:
   401. Konfiguraci klientů test neověřuje.
 - **REST API z HW2 a .NET proxy:** gate je nechrání, v rozšíření nemají běžet (M3).
 - **Integrita auditního logu:** zápis je jen append do souboru, bez ochrany
-  proti přepsání.
+  proti přepsání. Test ověřuje, že bez logu se nic nevydá (V24), ne že log
+  nejde zpětně upravit.

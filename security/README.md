@@ -23,11 +23,12 @@ a `db.py`), kterou MCP server importuje. Odkazy do `HW1/` míří na ni.
   textu zprávy, takže klient A se dostane k hodinám, sazbám a popisům
   práce klienta B. Stačí, když se zeptá.
 - **Klíčová mitigace (implementovaná v kap. 7):** autorizační gate v MCP
-  serveru. Identitu odvodí z ověřeného Telegram `chat_id`, nikdy z promptu ani
-  z argumentu nástroje, a každý nástroj omezí na projekty dané identity.
-- **Důkaz:** test přes skutečný MCP protokol nad syntetickými daty, 14/14
-  prošlo. S vypnutým gate (`--gate-off`) padá všech 9 případů, kde má gate
-  zastavit cizí data, a cizí data jsou přímo ve výstupu.
+  serveru. Identitu odvodí z ověřeného Telegram `chat_id`, jen ze soukromého
+  chatu, nikdy z promptu ani z argumentu nástroje, a každý nástroj omezí na
+  projekty dané identity. Bez politiky nebo auditního logu nevydá nic.
+- **Důkaz:** test přes skutečný MCP protokol nad syntetickými daty, 19/19
+  prošlo. S vypnutým gate (`--gate-off`) padá všech 12 případů, kde má gate
+  zastavit data, a data jsou přímo ve výstupu.
 
 ```bash
 cd security && uv sync && uv run pytest -v

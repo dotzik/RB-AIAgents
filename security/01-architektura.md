@@ -10,15 +10,16 @@ nebo „kolik zbývá do kapacity“. Výsledky počítají deterministické ná
 model jen vybírá nástroj a formuluje odpověď.
 
 **Vymezený scénář:** kontaktní osoba klienta napíše botu do Telegramu
-a dostane hodiny a fakturační podklad **jen za projekty svého klienta**.
-Vlastník (dodavatel) bot používá bez omezení.
+v soukromém chatu a dostane hodiny a fakturační podklad **jen za projekty
+svého klienta**. Vlastník (dodavatel) bot používá dál bez omezení, ze svého
+Telegram účtu.
 
 ## 1.2 Uživatelé, identity a aktiva
 
 | Identita | Kdo | Jak se dnes prokazuje |
 |---|---|---|
-| Vlastník | dodavatel, provozovatel systému | nijak, systém běží na jeho notebooku |
-| Klient (plánováno) | kontaktní osoba klienta v Telegramu | **nijak**, bot odpoví komukoli |
+| Vlastník | dodavatel, provozovatel systému | nijak, systém běží na jeho notebooku; v Telegramu nijak, bot odpoví komukoli |
+| Klient (plánováno) | kontaktní osoba klienta v Telegramu | **nijak**, bot odpoví komukoli, i ve skupině |
 | Služby | n8n, LangFlow, 3 agenti (MAF, LangGraph, Pydantic AI), .NET MCP proxy | nijak, MCP je bez autentizace |
 | Model | lokální Ollama (`qwen2.5:32b`) na LAN | není identita, volá nástroje za uživatele |
 
@@ -123,7 +124,17 @@ flowchart LR
 
 - Bot používají kontaktní osoby klientů, jeden klient může mít víc lidí
   (víc `chat_id`).
-- Vazbu `chat_id → klient` spravuje vlastník ručně.
+- **Oprávnění má klient (firma), ne osoba.** Všechny kontaktní osoby téhož
+  klienta vidí totéž. Vědomé rozhodnutí: podklad k faktuře patří firmě
+  a klienti dnes nemají projekty, které by před vlastními lidmi skrývali.
+  Kdyby to přestalo platit, politika musí mapovat `chat_id` na projekty, ne
+  na klienta.
+- Bot se používá **jen v soukromém chatu**. Ve skupině je `chat.id` id
+  skupiny, ne člověka, a identita by se tak sdílela se všemi členy.
+- Vlastník má vlastní `chat_id` v politice (`owner_chat_ids`).
+- Vazbu `chat_id → klient` spravuje vlastník ručně. Nové `chat_id` přidá až
+  po ověření s klientem jiným kanálem (e-mail, telefon), ne podle toho, co
+  člověk napíše botovi.
 - Klient vidí hodiny, popisy, fakturační podklad a sazbu **jen svých projektů**.
 - Data se do DB dostávají periodickým importem exportu CSV. Přesný formát
   exportu zatím neznám.

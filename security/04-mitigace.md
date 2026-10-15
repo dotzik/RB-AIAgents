@@ -20,7 +20,7 @@ Rozdělení rolí v kapitole 6.
 ## 4.2 M1 · Autorizační gate v MCP serveru
 
 **Řetězec:** T2 (identita z promptu) → hranice B2 a B3 → gate v MCP serveru →
-testy V0–V13 (kap. 5) → zbytkové riziko níže.
+testy V0–V13 a V21–V25 (kap. 5) → zbytkové riziko níže.
 
 **Proč v MCP serveru:** všech pět klientů volá nástroje přes něj. Kontrola
 v n8n by chránila jen Telegram, kontrola v promptu nechrání nic. Gate je
@@ -32,7 +32,8 @@ deterministický kód před SQL dotazem, model ho nemůže přesvědčit.
 |---|---|---|
 | Identita služby | hlavička `Authorization: Bearer <token>`, každý klient MCP má vlastní token | token zná jen daná služba, porovnání v konstantním čase |
 | Identita uživatele | hlavička `X-Timeagent-Chat-Id`, nastaví ji n8n z `message.chat.id` Telegram updatu | hodnota pochází z Telegram API, ne z textu zprávy; model hlavičky nevidí ani nenastaví |
-| Oprávnění | soubor politiky `access.toml`: služba → role, `chat_id` → klient | spravuje ho jen vlastník, změna přes git |
+| Typ chatu | hlavička `X-Timeagent-Chat-Type` z `message.chat.type` | identitu gate uzná jen pro `private`; ve skupině `chat.id` neoznačuje člověka |
+| Oprávnění | soubor politiky `access.toml`: služba → role, `chat_id` → klient, `owner_chat_ids` | spravuje ho jen vlastník, změna přes git; `chat_id` nesmí být vlastník i klient zároveň (politika se jinak nenačte) |
 | Vazba projekt → klient | databáze (`projects.client`) | zdroj pravdy o datech |
 
 **Nedůvěryhodné:** všechny argumenty nástrojů. Identita v argumentu
@@ -43,7 +44,8 @@ deterministický kód před SQL dotazem, model ho nemůže přesvědčit.
 | Role | Kdo | Co smí |
 |---|---|---|
 | `owner` | tři frameworkoví agenti a LangFlow vlastníka | vše jako dnes; po nasazení gate musí každý posílat svůj token (dnes se připojují bez něj) |
-| `client-proxy` | n8n Telegram workflow | jen za ověřeného klienta podle `chat_id`, viz níže |
+| `client-proxy` | n8n Telegram workflow | jen za ověřeného klienta podle `chat_id`, viz níže; `chat_id` z `owner_chat_ids` dostane roli `owner` |
+| — | jakýkoli chat jiný než soukromý | nic, ani vlastník (`chat_not_private`) |
 | bez role | neznámý nebo chybějící token | nic, HTTP 401 ještě před MCP |
 
 Klient přes `client-proxy`:
@@ -60,7 +62,9 @@ Klient přes `client-proxy`:
 ### Chování při chybě
 
 - **Fail closed:** chybí politika, nejde ji načíst, neznámý `chat_id`,
-  výjimka v gate. Ve všech případech zamítnuto, nástroj se nezavolá.
+  chat jiný než soukromý, výjimka v gate, chybí auditní log nebo do něj
+  nejde zapsat. Ve všech případech zamítnuto, nástroj se nezavolá. Bez
+  záznamu v auditu se nevydá nic.
 - Zamítnutí vrátí krátkou hlášku bez cizích dat („Projekt není dostupný.
   Vaše projekty: …“). **Nikdy** nevypisuje projekty jiných klientů. Tím se
   zavře i únik přes chybovou hlášku z `tools.py:78-83`.
@@ -70,7 +74,11 @@ Klient přes `client-proxy`:
 ### Omezení a zbytkové riziko
 
 - **n8n je důvěryhodný prostředník.** Kdo ovládne n8n, nastaví libovolné
-  `chat_id`. Snižuje M4, plně neřeší.
+  `chat_id` i typ chatu, včetně vlastníkova. Dostane tak všechna data.
+  `owner_chat_ids` tím riziko nezvětšuje, protože i bez něj by prošel
+  klienty jednoho po druhém. Snižuje M4, plně neřeší.
+- **Oprávnění na úrovni klienta, ne osoby** (kap. 1.4). Kontaktní osoby
+  téhož klienta vidí totéž.
 - **Převzatý Telegram účet klienta** vidí data toho klienta. Platí pro
   každou službu s přihlášením. Řeší se rychlým odebráním `chat_id`
   z politiky (kap. 6).
@@ -87,8 +95,8 @@ Klient přes `client-proxy`:
 
 | ID | Konkrétně | Chování při chybě | Zbytkové riziko |
 |---|---|---|---|
-| **M2** | Uzel „Allowlist“ hned za Telegram triggerem: `chat.id` musí být v seznamu, jinak se zpráva zahodí bez odpovědi. Limit 10 zpráv za minutu na `chat_id`. | neznámý odesílatel nedostane nic, ani chybovou hlášku | Je to druhá vrstva. Rozhoduje M1, kdyby někdo allowlist v n8n omylem smazal. |
-| **M3** | V rozšíření neběží původní MCP server z HW3 (nahradí ho server s gate), REST API z HW2 ani .NET MCP proxy. MCP port se nepublikuje na hostitele, klienti na hostiteli jdou přes token. Chat webhook n8n `public: false`. | služba, která není v compose, nemá cestu k DB | kontejner s tokenem `owner` vidí vše |
+| **M2** | Uzel „Allowlist“ hned za Telegram triggerem: `chat.type` musí být `private` a `chat.id` v seznamu, jinak se zpráva zahodí bez odpovědi. Seznam se generuje z `access.toml`, aby se dvě místa nerozešla. Limit 10 zpráv za minutu na `chat_id`. | neznámý odesílatel nedostane nic, ani chybovou hlášku | Je to druhá vrstva. Rozhoduje M1, kdyby někdo allowlist v n8n omylem smazal. |
+| **M3** | V rozšíření neběží původní MCP server z HW3 (nahradí ho server s gate), REST API z HW2 ani .NET MCP proxy. MCP port zůstává publikovaný jen na loopback hostitele (agenti tam běží mimo docker síť) a bez tokenu vrací 401. Chat webhook n8n `public: false`. | služba, která není v compose, nemá cestu k DB | kontejner s tokenem `owner` vidí vše |
 | **M4** | Heslo n8n z tajemství, ne výchozí. `N8N_BLOCK_ENV_ACCESS_IN_NODE=true`. Bot token jen v n8n credential. LangFlow `AUTO_LOGIN=false`. Tokeny MCP po jednom na službu, rotace při podezření. | služba bez nastaveného tajemství nenastartuje | malware na hostiteli |
 | **M5** | Každý klient při startu ověří `OLLAMA_BASE_URL` proti allowlistu (loopback, docker síť, privátní rozsahy). Jinak odmítne běžet. Ollama na stejném stroji nebo přes WireGuard, ne plain HTTP přes LAN. | start selže s hláškou, data neodejdou | vědomé přepsání allowlistu vlastníkem |
 | **M6** | Importer bere jen očekávané sloupce, popis zkrátí na 200 znaků, zahodí sloupec s osobou (jména). V promptu jsou výsledky nástrojů označené jako data, ne pokyny. | řádek mimo schéma se přeskočí a zaloguje | Injection v popisu může zůstat. Rozhoduje M1, prompt je jen pomocná vrstva. |

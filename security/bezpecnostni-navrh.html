@@ -79,11 +79,12 @@ a <code>db.py</code>), kterou MCP server importuje. Odkazy do <code>HW1/</code> 
   textu zprávy, takže klient A se dostane k hodinám, sazbám a popisům
   práce klienta B. Stačí, když se zeptá.</li>
 <li><strong>Klíčová mitigace (implementovaná v kap. 7):</strong> autorizační gate v MCP
-  serveru. Identitu odvodí z ověřeného Telegram <code>chat_id</code>, nikdy z promptu ani
-  z argumentu nástroje, a každý nástroj omezí na projekty dané identity.</li>
-<li><strong>Důkaz:</strong> test přes skutečný MCP protokol nad syntetickými daty, 14/14
-  prošlo. S vypnutým gate (<code>--gate-off</code>) padá všech 9 případů, kde má gate
-  zastavit cizí data, a cizí data jsou přímo ve výstupu.</li>
+  serveru. Identitu odvodí z ověřeného Telegram <code>chat_id</code>, jen ze soukromého
+  chatu, nikdy z promptu ani z argumentu nástroje, a každý nástroj omezí na
+  projekty dané identity. Bez politiky nebo auditního logu nevydá nic.</li>
+<li><strong>Důkaz:</strong> test přes skutečný MCP protokol nad syntetickými daty, 19/19
+  prošlo. S vypnutým gate (<code>--gate-off</code>) padá všech 12 případů, kde má gate
+  zastavit data, a data jsou přímo ve výstupu.</li>
 </ul>
 <pre><code class="language-bash">cd security &amp;&amp; uv sync &amp;&amp; uv run pytest -v
 </code></pre>
@@ -149,8 +150,9 @@ a <code>db.py</code>), kterou MCP server importuje. Odkazy do <code>HW1/</code> 
 nebo „kolik zbývá do kapacity“. Výsledky počítají deterministické nástroje,
 model jen vybírá nástroj a formuluje odpověď.</p>
 <p><strong>Vymezený scénář:</strong> kontaktní osoba klienta napíše botu do Telegramu
-a dostane hodiny a fakturační podklad <strong>jen za projekty svého klienta</strong>.
-Vlastník (dodavatel) bot používá bez omezení.</p>
+v soukromém chatu a dostane hodiny a fakturační podklad <strong>jen za projekty
+svého klienta</strong>. Vlastník (dodavatel) bot používá dál bez omezení, ze svého
+Telegram účtu.</p>
 <h2>1.2 Uživatelé, identity a aktiva</h2>
 <div class="tbl"><table>
 <thead>
@@ -164,12 +166,12 @@ Vlastník (dodavatel) bot používá bez omezení.</p>
 <tr>
 <td>Vlastník</td>
 <td>dodavatel, provozovatel systému</td>
-<td>nijak, systém běží na jeho notebooku</td>
+<td>nijak, systém běží na jeho notebooku; v Telegramu nijak, bot odpoví komukoli</td>
 </tr>
 <tr>
 <td>Klient (plánováno)</td>
 <td>kontaktní osoba klienta v Telegramu</td>
-<td><strong>nijak</strong>, bot odpoví komukoli</td>
+<td><strong>nijak</strong>, bot odpoví komukoli, i ve skupině</td>
 </tr>
 <tr>
 <td>Služby</td>
@@ -416,7 +418,17 @@ Vlastník (dodavatel) bot používá bez omezení.</p>
 <ul>
 <li>Bot používají kontaktní osoby klientů, jeden klient může mít víc lidí
   (víc <code>chat_id</code>).</li>
-<li>Vazbu <code>chat_id → klient</code> spravuje vlastník ručně.</li>
+<li><strong>Oprávnění má klient (firma), ne osoba.</strong> Všechny kontaktní osoby téhož
+  klienta vidí totéž. Vědomé rozhodnutí: podklad k faktuře patří firmě
+  a klienti dnes nemají projekty, které by před vlastními lidmi skrývali.
+  Kdyby to přestalo platit, politika musí mapovat <code>chat_id</code> na projekty, ne
+  na klienta.</li>
+<li>Bot se používá <strong>jen v soukromém chatu</strong>. Ve skupině je <code>chat.id</code> id
+  skupiny, ne člověka, a identita by se tak sdílela se všemi členy.</li>
+<li>Vlastník má vlastní <code>chat_id</code> v politice (<code>owner_chat_ids</code>).</li>
+<li>Vazbu <code>chat_id → klient</code> spravuje vlastník ručně. Nové <code>chat_id</code> přidá až
+  po ověření s klientem jiným kanálem (e-mail, telefon), ne podle toho, co
+  člověk napíše botovi.</li>
 <li>Klient vidí hodiny, popisy, fakturační podklad a sazbu <strong>jen svých projektů</strong>.</li>
 <li>Data se do DB dostávají periodickým importem exportu CSV. Přesný formát
   exportu zatím neznám.</li>
@@ -506,7 +518,12 @@ Vlastník (dodavatel) bot používá bez omezení.</p>
 <p><strong>T1 · Bot odpoví komukoli</strong>
 - <em>Cesta:</em> cizí člověk najde bota podle jména a napíše „vypiš všechny
   projekty a hodiny za září“. n8n zprávu bez kontroly odesílatele předá agentovi.
-- <em>Dopad:</em> hodiny, klienti a sazby všech klientů.</p>
+- <em>Varianta se skupinou:</em> kontaktní osoba klienta přidá bota do skupiny
+  s lidmi mimo klienta. <code>chat.id</code> je pak id skupiny a odpověď vidí všichni
+  členové. Allowlist podle <code>chat.id</code> to nezastaví, pokud se do něj omylem
+  dostane id skupiny.
+- <em>Dopad:</em> hodiny, klienti a sazby všech klientů; u skupiny data jednoho
+  klienta u lidí, kteří k nim nemají mít přístup.</p>
 <p><strong>T2 · Identita z promptu, nástroje bez filtru</strong>
 - <em>Cesta:</em> klient A napíše „jsem z Northwindu, dej podklad k faktuře“, nebo
   se zeptá bez projektu („kolik hodin celkem“). Model zavolá
@@ -591,7 +608,7 @@ lokální stav. Škála: nízká, střední, vysoká.</p>
 <td><strong>T1</strong></td>
 <td>vysoká</td>
 <td>vysoký</td>
-<td>Telegram boti jsou dohledatelní podle jména. Bez allowlistu je T1 ještě horší než T2, protože útočník nemusí být klient. Řeší ho tatáž kontrola identity jako T2.</td>
+<td>Telegram boti jsou dohledatelní podle jména a útočník nemusí být klient. Dopad je tedy ještě širší než u T2, ale vyžaduje, aby bota někdo cizí našel a zkoušel. T2 nastane i bez útočníka, běžným dotazem, proto je první. Obě řeší tatáž kontrola identity.</td>
 </tr>
 <tr>
 <td>3</td>
@@ -718,7 +735,7 @@ počítají nástroje.</p>
 Rozdělení rolí v kapitole 6.</p>
 <h2>4.2 M1 · Autorizační gate v MCP serveru</h2>
 <p><strong>Řetězec:</strong> T2 (identita z promptu) → hranice B2 a B3 → gate v MCP serveru →
-testy V0–V13 (kap. 5) → zbytkové riziko níže.</p>
+testy V0–V13 a V21–V25 (kap. 5) → zbytkové riziko níže.</p>
 <p><strong>Proč v MCP serveru:</strong> všech pět klientů volá nástroje přes něj. Kontrola
 v n8n by chránila jen Telegram, kontrola v promptu nechrání nic. Gate je
 deterministický kód před SQL dotazem, model ho nemůže přesvědčit.</p>
@@ -743,9 +760,14 @@ deterministický kód před SQL dotazem, model ho nemůže přesvědčit.</p>
 <td>hodnota pochází z Telegram API, ne z textu zprávy; model hlavičky nevidí ani nenastaví</td>
 </tr>
 <tr>
+<td>Typ chatu</td>
+<td>hlavička <code>X-Timeagent-Chat-Type</code> z <code>message.chat.type</code></td>
+<td>identitu gate uzná jen pro <code>private</code>; ve skupině <code>chat.id</code> neoznačuje člověka</td>
+</tr>
+<tr>
 <td>Oprávnění</td>
-<td>soubor politiky <code>access.toml</code>: služba → role, <code>chat_id</code> → klient</td>
-<td>spravuje ho jen vlastník, změna přes git</td>
+<td>soubor politiky <code>access.toml</code>: služba → role, <code>chat_id</code> → klient, <code>owner_chat_ids</code></td>
+<td>spravuje ho jen vlastník, změna přes git; <code>chat_id</code> nesmí být vlastník i klient zároveň (politika se jinak nenačte)</td>
 </tr>
 <tr>
 <td>Vazba projekt → klient</td>
@@ -774,7 +796,12 @@ deterministický kód před SQL dotazem, model ho nemůže přesvědčit.</p>
 <tr>
 <td><code>client-proxy</code></td>
 <td>n8n Telegram workflow</td>
-<td>jen za ověřeného klienta podle <code>chat_id</code>, viz níže</td>
+<td>jen za ověřeného klienta podle <code>chat_id</code>, viz níže; <code>chat_id</code> z <code>owner_chat_ids</code> dostane roli <code>owner</code></td>
+</tr>
+<tr>
+<td>—</td>
+<td>jakýkoli chat jiný než soukromý</td>
+<td>nic, ani vlastník (<code>chat_not_private</code>)</td>
 </tr>
 <tr>
 <td>bez role</td>
@@ -821,7 +848,9 @@ deterministický kód před SQL dotazem, model ho nemůže přesvědčit.</p>
 <h3>Chování při chybě</h3>
 <ul>
 <li><strong>Fail closed:</strong> chybí politika, nejde ji načíst, neznámý <code>chat_id</code>,
-  výjimka v gate. Ve všech případech zamítnuto, nástroj se nezavolá.</li>
+  chat jiný než soukromý, výjimka v gate, chybí auditní log nebo do něj
+  nejde zapsat. Ve všech případech zamítnuto, nástroj se nezavolá. Bez
+  záznamu v auditu se nevydá nic.</li>
 <li>Zamítnutí vrátí krátkou hlášku bez cizích dat („Projekt není dostupný.
   Vaše projekty: …“). <strong>Nikdy</strong> nevypisuje projekty jiných klientů. Tím se
   zavře i únik přes chybovou hlášku z <code>tools.py:78-83</code>.</li>
@@ -831,7 +860,11 @@ deterministický kód před SQL dotazem, model ho nemůže přesvědčit.</p>
 <h3>Omezení a zbytkové riziko</h3>
 <ul>
 <li><strong>n8n je důvěryhodný prostředník.</strong> Kdo ovládne n8n, nastaví libovolné
-  <code>chat_id</code>. Snižuje M4, plně neřeší.</li>
+  <code>chat_id</code> i typ chatu, včetně vlastníkova. Dostane tak všechna data.
+  <code>owner_chat_ids</code> tím riziko nezvětšuje, protože i bez něj by prošel
+  klienty jednoho po druhém. Snižuje M4, plně neřeší.</li>
+<li><strong>Oprávnění na úrovni klienta, ne osoby</strong> (kap. 1.4). Kontaktní osoby
+  téhož klienta vidí totéž.</li>
 <li><strong>Převzatý Telegram účet klienta</strong> vidí data toho klienta. Platí pro
   každou službu s přihlášením. Řeší se rychlým odebráním <code>chat_id</code>
   z politiky (kap. 6).</li>
@@ -857,13 +890,13 @@ deterministický kód před SQL dotazem, model ho nemůže přesvědčit.</p>
 <tbody>
 <tr>
 <td><strong>M2</strong></td>
-<td>Uzel „Allowlist“ hned za Telegram triggerem: <code>chat.id</code> musí být v seznamu, jinak se zpráva zahodí bez odpovědi. Limit 10 zpráv za minutu na <code>chat_id</code>.</td>
+<td>Uzel „Allowlist“ hned za Telegram triggerem: <code>chat.type</code> musí být <code>private</code> a <code>chat.id</code> v seznamu, jinak se zpráva zahodí bez odpovědi. Seznam se generuje z <code>access.toml</code>, aby se dvě místa nerozešla. Limit 10 zpráv za minutu na <code>chat_id</code>.</td>
 <td>neznámý odesílatel nedostane nic, ani chybovou hlášku</td>
 <td>Je to druhá vrstva. Rozhoduje M1, kdyby někdo allowlist v n8n omylem smazal.</td>
 </tr>
 <tr>
 <td><strong>M3</strong></td>
-<td>V rozšíření neběží původní MCP server z HW3 (nahradí ho server s gate), REST API z HW2 ani .NET MCP proxy. MCP port se nepublikuje na hostitele, klienti na hostiteli jdou přes token. Chat webhook n8n <code>public: false</code>.</td>
+<td>V rozšíření neběží původní MCP server z HW3 (nahradí ho server s gate), REST API z HW2 ani .NET MCP proxy. MCP port zůstává publikovaný jen na loopback hostitele (agenti tam běží mimo docker síť) a bez tokenu vrací 401. Chat webhook n8n <code>public: false</code>.</td>
 <td>služba, která není v compose, nemá cestu k DB</td>
 <td>kontejner s tokenem <code>owner</code> vidí vše</td>
 </tr>
@@ -1070,6 +1103,41 @@ gate by seznam obsahoval cizí projekty.</p>
 <td>povoleno, nula a poznámka</td>
 <td>poznámka uvádí rozsah dat jen z projektů Acme, ne datum záznamu Northwindu mimo něj</td>
 </tr>
+<tr>
+<td>V21</td>
+<td>zakázaný</td>
+<td>klient A ze skupiny, supergroup, kanálu nebo bez typu chatu</td>
+<td>zamítnuto; ze soukromého chatu povoleno</td>
+<td>žádná data; audit <code>deny</code>, <code>chat_not_private</code></td>
+</tr>
+<tr>
+<td>V22</td>
+<td>legitimní</td>
+<td>vlastník přes Telegram (<code>owner_chat_ids</code>), <code>compute_invoice</code> cizího projektu a <code>capacity_check</code></td>
+<td>povoleno</td>
+<td>výsledek = volání bez gate; audit <code>role: owner</code> s jeho <code>chat_id</code></td>
+</tr>
+<tr>
+<td>V23</td>
+<td>zakázaný</td>
+<td>vlastník ze skupiny</td>
+<td>zamítnuto</td>
+<td>žádná data</td>
+</tr>
+<tr>
+<td>V24</td>
+<td>chybový</td>
+<td>auditní log není nastavený</td>
+<td>HTTP 503</td>
+<td>nástroj se nezavolá ani pro <code>owner</code></td>
+</tr>
+<tr>
+<td>V25</td>
+<td>zakázaný</td>
+<td>klient A, část názvu, která sedí na dva jeho projekty</td>
+<td>zamítnuto jako nejednoznačné</td>
+<td>hláška nabídne jen vlastní projekty</td>
+</tr>
 </tbody>
 </table></div>
 <p><strong>Proč to odpovídá hrozbě:</strong> T2 je únik dat jiného klienta. Test proto
@@ -1091,9 +1159,9 @@ výsledku), ne jen návratový kód. Nástroje jsou read-only, takže zakázaný
 <tr>
 <td>V14</td>
 <td>M2</td>
-<td>zpráva z účtu mimo allowlist</td>
-<td>zpráva z povoleného účtu</td>
-<td>cizí bez odpovědi, v n8n běh končí v uzlu Allowlist; povolený dostane odpověď</td>
+<td>zpráva z účtu mimo allowlist; zpráva ze skupiny, kde je povolený účet</td>
+<td>zpráva z povoleného účtu v soukromém chatu</td>
+<td>cizí i skupina bez odpovědi, v n8n běh končí v uzlu Allowlist; povolený dostane odpověď; n8n posílá na MCP <code>chat.id</code> i <code>chat.type</code></td>
 </tr>
 <tr>
 <td>V15</td>
@@ -1150,7 +1218,7 @@ výsledku), ne jen návratový kód. Nástroje jsou read-only, takže zakázaný
 <tbody>
 <tr>
 <td>M1</td>
-<td><strong>získáno v kap. 7</strong>: výstup testu V0–V13 a běh s vypnutým gate</td>
+<td><strong>získáno v kap. 7</strong>: výstup testu V0–V13 a V21–V25 a běh s vypnutým gate</td>
 </tr>
 <tr>
 <td>M2–M7</td>
@@ -1205,7 +1273,7 @@ uvnitř dat téhož klienta; důvěra v n8n jako prostředníka (kap. 4.2).</p>
 <tbody>
 <tr>
 <td><strong>Audit gate</strong></td>
-<td>čas, služba, <code>chat_id</code>, klient, nástroj, argumenty, rozhodnutí, důvod</td>
+<td>čas, služba, role, <code>chat_id</code>, typ chatu, klient, nástroj, argumenty, rozhodnutí, důvod</td>
 <td><code>TIMEAGENT_AUDIT_LOG</code>, JSON lines</td>
 <td>12 měsíců (podklad k fakturaci a sporům)</td>
 <td>soubor mimo kontejnery n8n a LangFlow, zápis jen MCP server; denní kopie mimo hostitele</td>
@@ -1226,9 +1294,13 @@ uvnitř dat téhož klienta; důvěra v n8n jako prostředníka (kap. 4.2).</p>
 </tr>
 </tbody>
 </table></div>
-<p>Audit neobsahuje výsledky nástrojů (hodiny, částky), jen co kdo chtěl a jak
-gate rozhodl. Únik logu tak neprozradí data klientů. <code>chat_id</code> je ale
-osobní údaj, proto omezená retence.</p>
+<p>Audit neobsahuje výsledky nástrojů (hodiny, částky, popisy), jen co kdo
+chtěl a jak gate rozhodl. Únik logu neprozradí čísla, ale prozradí, kdo se
+ptal na který projekt a kdy, a argumenty od modelu mohou nést text ze
+zprávy. <code>chat_id</code> je navíc osobní údaj. Proto je log chráněný stejně jako
+data a má omezenou retenci.</p>
+<p>Audit je povinný: bez nastaveného logu server odpoví 503 a při chybě zápisu
+nevydá výsledek (V24). Vypnout ho tedy nejde potichu.</p>
 <h2>6.3 Signály pro triage</h2>
 <div class="tbl"><table>
 <thead>
@@ -1255,9 +1327,24 @@ osobní údaj, proto omezená retence.</p>
 <td>střední</td>
 </tr>
 <tr>
+<td><code>chat_not_private</code></td>
+<td>bot je ve skupině nebo kanálu, n8n filtr typu chatu selhal (T1, M2)</td>
+<td>střední</td>
+</tr>
+<tr>
+<td><code>role: owner</code> s <code>chat_id</code> z Telegramu mimo obvyklou dobu</td>
+<td>převzatý účet vlastníka, nejcitlivější identita</td>
+<td>vysoká</td>
+</tr>
+<tr>
 <td><code>policy_unavailable</code></td>
 <td>výpadek politiky, služba stojí (fail closed)</td>
 <td>střední, provozní</td>
+</tr>
+<tr>
+<td>503 bez záznamu v auditu</td>
+<td>audit není nastavený nebo nejde zapsat, služba stojí</td>
+<td>střední, provozní (signál je 503 v access logu uvicorn, audit sám zapsat nejde)</td>
 </tr>
 <tr>
 <td><code>allow</code> od klienta mimo obvyklou dobu nebo v objemu &gt; 10× průměru</td>
@@ -1283,6 +1370,11 @@ osobní údaj, proto omezená retence.</p>
 <td>nové <code>chat_id</code> po ověření s klientem jiným kanálem</td>
 </tr>
 <tr>
+<td>Ztráta telefonu vlastníka</td>
+<td>odebrat jeho <code>chat_id</code> z <code>owner_chat_ids</code>; správa jde dál přes <code>owner-cli</code></td>
+<td>nové <code>chat_id</code> po obnově účtu</td>
+</tr>
+<tr>
 <td>Únik tokenu služby</td>
 <td>smazat hash tokenu v politice, služba dostane 401</td>
 <td>nový token, hash do politiky, záznam do gitu</td>
@@ -1305,8 +1397,10 @@ nevrátil.</p>
 <ul>
 <li>Politika, kód gate i compose jsou v gitu. Změnu politiky (nový klient)
   dělá vlastník commitem.</li>
-<li><strong>Test gate (V0–V13) musí projít před každou změnou</strong> nástrojů, gate nebo
-  MCP serveru. Neprošlý test blokuje nasazení.</li>
+<li><strong>Test gate (V0–V13, V21–V25) musí projít před každou změnou</strong> nástrojů,
+  gate nebo MCP serveru. Neprošlý test blokuje nasazení.</li>
+<li>Přidání <code>chat_id</code> do <code>owner_chat_ids</code> je nejcitlivější změna politiky:
+  dává přístup ke všem klientům. Jen pro vlastní účet vlastníka.</li>
 <li>Nový nástroj je pro klienty zakázaný, dokud se výslovně nepřidá do
   <code>CLIENT_TOOLS</code> s testem.</li>
 <li>Změna modelu nebo <code>OLLAMA_BASE_URL</code> se ověří proti allowlistu (M5).</li>
@@ -1349,8 +1443,8 @@ nevrátil.</p>
 </thead>
 <tbody>
 <tr>
-<td>Test gate V0–V13</td>
-<td>2026-10-14, 14/14 prošlo; s vypnutým gate 9 padá</td>
+<td>Test gate V0–V13, V21–V25</td>
+<td>2026-10-15, 19/19 prošlo; s vypnutým gate 12 padá</td>
 <td>při každé změně, minimálně před nasazením</td>
 </tr>
 <tr>
@@ -1360,7 +1454,7 @@ nevrátil.</p>
 </tr>
 <tr>
 <td>Revize threat modelu</td>
-<td>2026-10-14</td>
+<td>2026-10-15 (skupinové chaty, vlastník přes Telegram, povinný audit)</td>
 <td>při přidání nového zdroje dat, nového kanálu nebo při publikování mimo domácí síť</td>
 </tr>
 </tbody>
@@ -1473,6 +1567,48 @@ našla další cestu úniku a dvě nepřesnosti v testu.</p>
 </tr>
 </tbody>
 </table></div>
+<p><strong>Doplněno po kontrole logiky (2026-10-15), zapsáno před úpravou gate:</strong>
+kontrola našla tři mezery v návrhu. V Telegram skupině je <code>chat.id</code> id
+skupiny, takže data klienta by viděli všichni její členové. Vlastník by po
+nasazení gate přes Telegram nedostal nic, protože služba <code>n8n-telegram</code> má
+jen roli <code>client-proxy</code>. Bez nastaveného auditního logu gate tiše neloguje.
+Čísla V21–V25 navazují na ruční ověření V14–V20 (kap. 5.2).</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Případ</th>
+<th>Očekávám</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V21</td>
+<td><code>1001</code> s typem chatu <code>group</code>, <code>supergroup</code>, <code>channel</code> nebo bez typu</td>
+<td>zamítnuto <code>chat_not_private</code>, žádná data; s <code>private</code> povoleno</td>
+</tr>
+<tr>
+<td>V22</td>
+<td><code>chat_id 7007</code> z <code>owner_chat_ids</code>, soukromý chat, <code>compute_invoice(NWND)</code> a <code>capacity_check</code></td>
+<td>povoleno, výsledek shodný s přímým voláním; audit <code>role: owner</code>, <code>chat_id: 7007</code></td>
+</tr>
+<tr>
+<td>V23</td>
+<td><code>7007</code> ze skupiny</td>
+<td>zamítnuto <code>chat_not_private</code></td>
+</tr>
+<tr>
+<td>V24</td>
+<td><code>TIMEAGENT_AUDIT_LOG</code> není nastavený</td>
+<td>HTTP 503 na každý požadavek, nástroj neběží</td>
+</tr>
+<tr>
+<td>V25</td>
+<td><code>1001</code>, <code>compute_invoice("Acme —")</code> (část názvu sedí na <code>ACME</code> i <code>ACM2</code>)</td>
+<td>zamítnuto <code>project_ambiguous</code>, nabídne oba vlastní projekty, žádná cizí data</td>
+</tr>
+</tbody>
+</table></div>
 <h2>7.3 Implementace</h2>
 <p>Nový server v <code>security/</code>, HW1–HW3 se nemění. Z HW3 přebírá seznam nástrojů
 a health check, nástroje volá stejně jako HW3 (<code>tools.call_tool</code>).</p>
@@ -1486,15 +1622,15 @@ a health check, nástroje volá stejně jako HW3 (<code>tools.call_tool</code>).
 <tbody>
 <tr>
 <td><code>src/timeagent_gate/policy.py</code></td>
-<td>načte politiku (TOML), ověří token (SHA-256, <code>hmac.compare_digest</code>), odvodí identitu z hlaviček</td>
+<td>načte politiku (TOML), ověří token (SHA-256, <code>hmac.compare_digest</code>), odvodí identitu z hlaviček; identitu uzná jen ze soukromého chatu, <code>owner_chat_ids</code> → role <code>owner</code></td>
 </tr>
 <tr>
 <td><code>src/timeagent_gate/gate.py</code></td>
-<td>rozhodnutí podle role a nástroje, projekt klienta jen mezi jeho projekty, zúžení <code>list_projects</code>, <code>tools/list</code> a poznámky o prázdném výsledku, auditní log</td>
+<td>rozhodnutí podle role a nástroje, projekt klienta jen mezi jeho projekty, zúžení <code>list_projects</code>, <code>tools/list</code> a poznámky o prázdném výsledku, povinný auditní log</td>
 </tr>
 <tr>
 <td><code>src/timeagent_gate/server.py</code></td>
-<td>ASGI vrstva před <code>/mcp</code> (401 bez tokenu, 503 bez politiky) a gate v <code>on_call_tool</code></td>
+<td>ASGI vrstva před <code>/mcp</code> (401 bez tokenu, 503 bez politiky nebo bez auditu) a gate v <code>on_call_tool</code></td>
 </tr>
 <tr>
 <td><code>access.example.toml</code></td>
@@ -1506,7 +1642,7 @@ a health check, nástroje volá stejně jako HW3 (<code>tools.call_tool</code>).
 </tr>
 <tr>
 <td><code>tests/test_gate.py</code></td>
-<td>případy V0–V13</td>
+<td>případy V0–V13 a V21–V25</td>
 </tr>
 </tbody>
 </table></div>
@@ -1525,30 +1661,43 @@ uv run pytest -v
 <p>První <code>uv sync</code> stahuje i <code>litellm</code>, závislost knihovny nástrojů, a trvá
 několik minut. Test nepotřebuje model, Docker ani síť mimo localhost.</p>
 <h2>7.5 Skutečný výstup</h2>
-<p>Běh 2026-10-14, Windows 11, Python 3.12.13:</p>
-<pre><code class="language-text">tests/test_gate.py::test_v0_bez_gate_cizi_data_uniknou PASSED            [  7%]
-tests/test_gate.py::test_v1_klient_dostane_fakturu_za_vlastni_projekt PASSED [ 14%]
-tests/test_gate.py::test_v2_cizi_projekt_je_zamitnut_bez_cizich_dat PASSED [ 21%]
-tests/test_gate.py::test_v3_dotaz_bez_projektu_nesecte_vsechny_klienty PASSED [ 28%]
-tests/test_gate.py::test_v4_souhrn_pres_klienty_a_kapacita_jsou_zamitnuty PASSED [ 35%]
-tests/test_gate.py::test_v5_neexistujici_projekt_nevypise_cizi_projekty PASSED [ 42%]
-tests/test_gate.py::test_v6_identita_v_argumentu_se_ignoruje PASSED      [ 50%]
-tests/test_gate.py::test_v7_neznamy_nebo_chybejici_chat_id PASSED        [ 57%]
-tests/test_gate.py::test_v8_bez_tokenu_a_se_spatnym_tokenem_401 PASSED   [ 64%]
-tests/test_gate.py::test_v9_bez_politiky_vse_zamitnuto PASSED            [ 71%]
-tests/test_gate.py::test_v10_vlastnik_vidi_vse_jako_bez_gate PASSED      [ 78%]
-tests/test_gate.py::test_v11_seznam_projektu_jen_vlastni PASSED          [ 85%]
-tests/test_gate.py::test_v12_revokace_plati_hned PASSED                  [ 92%]
-tests/test_gate.py::test_v13_prazdny_vysledek_neprozradi_rozsah_cizich_dat PASSED [100%]
+<p>Běh 2026-10-15, Windows 11, Python 3.12.13:</p>
+<pre><code class="language-text">tests/test_gate.py::test_v0_bez_gate_cizi_data_uniknou PASSED            [  5%]
+tests/test_gate.py::test_v1_klient_dostane_fakturu_za_vlastni_projekt PASSED [ 10%]
+tests/test_gate.py::test_v2_cizi_projekt_je_zamitnut_bez_cizich_dat PASSED [ 15%]
+tests/test_gate.py::test_v3_dotaz_bez_projektu_nesecte_vsechny_klienty PASSED [ 21%]
+tests/test_gate.py::test_v4_souhrn_pres_klienty_a_kapacita_jsou_zamitnuty PASSED [ 26%]
+tests/test_gate.py::test_v5_neexistujici_projekt_nevypise_cizi_projekty PASSED [ 31%]
+tests/test_gate.py::test_v6_identita_v_argumentu_se_ignoruje PASSED      [ 36%]
+tests/test_gate.py::test_v7_neznamy_nebo_chybejici_chat_id PASSED        [ 42%]
+tests/test_gate.py::test_v8_bez_tokenu_a_se_spatnym_tokenem_401 PASSED   [ 47%]
+tests/test_gate.py::test_v9_bez_politiky_vse_zamitnuto PASSED            [ 52%]
+tests/test_gate.py::test_v10_vlastnik_vidi_vse_jako_bez_gate PASSED      [ 57%]
+tests/test_gate.py::test_v11_seznam_projektu_jen_vlastni PASSED          [ 63%]
+tests/test_gate.py::test_v12_revokace_plati_hned PASSED                  [ 68%]
+tests/test_gate.py::test_v13_prazdny_vysledek_neprozradi_rozsah_cizich_dat PASSED [ 73%]
+tests/test_gate.py::test_v21_identitu_uzna_jen_soukromy_chat PASSED      [ 78%]
+tests/test_gate.py::test_v22_vlastnik_pres_telegram_vidi_vse PASSED      [ 84%]
+tests/test_gate.py::test_v23_vlastnik_ve_skupine_je_zamitnut PASSED      [ 89%]
+tests/test_gate.py::test_v24_bez_auditu_nic_nevyda PASSED                [ 94%]
+tests/test_gate.py::test_v25_nejednoznacny_nazev_jen_mezi_vlastnimi PASSED [100%]
 
-============================= 14 passed in 1.62s ==============================
+============================= 19 passed in 1.41s ==============================
 </code></pre>
 <p>Auditní záznamy z V2 (klient Acme žádá fakturu Northwindu id i názvem):</p>
-<pre><code class="language-json">{&quot;ts&quot;: &quot;2026-10-14T15:37:21.495+00:00&quot;, &quot;service&quot;: &quot;n8n-telegram&quot;, &quot;role&quot;: &quot;client-proxy&quot;, &quot;chat_id&quot;: &quot;1001&quot;, &quot;client&quot;: &quot;Acme Corp&quot;, &quot;tool&quot;: &quot;compute_invoice&quot;, &quot;arguments&quot;: {&quot;project&quot;: &quot;NWND&quot;, &quot;month&quot;: &quot;2026-08&quot;}, &quot;decision&quot;: &quot;deny&quot;, &quot;reason&quot;: &quot;project_not_allowed&quot;}
-{&quot;ts&quot;: &quot;2026-10-14T15:37:21.509+00:00&quot;, &quot;service&quot;: &quot;n8n-telegram&quot;, &quot;role&quot;: &quot;client-proxy&quot;, &quot;chat_id&quot;: &quot;1001&quot;, &quot;client&quot;: &quot;Acme Corp&quot;, &quot;tool&quot;: &quot;compute_invoice&quot;, &quot;arguments&quot;: {&quot;project&quot;: &quot;Northwind&quot;, &quot;month&quot;: &quot;2026-08&quot;}, &quot;decision&quot;: &quot;deny&quot;, &quot;reason&quot;: &quot;project_not_allowed&quot;}
+<pre><code class="language-json">{&quot;ts&quot;: &quot;2026-10-15T16:37:23.261+00:00&quot;, &quot;service&quot;: &quot;n8n-telegram&quot;, &quot;role&quot;: &quot;client-proxy&quot;, &quot;chat_id&quot;: &quot;1001&quot;, &quot;client&quot;: &quot;Acme Corp&quot;, &quot;chat_type&quot;: &quot;private&quot;, &quot;tool&quot;: &quot;compute_invoice&quot;, &quot;arguments&quot;: {&quot;project&quot;: &quot;NWND&quot;, &quot;month&quot;: &quot;2026-08&quot;}, &quot;decision&quot;: &quot;deny&quot;, &quot;reason&quot;: &quot;project_not_allowed&quot;}
+{&quot;ts&quot;: &quot;2026-10-15T16:37:23.291+00:00&quot;, &quot;service&quot;: &quot;n8n-telegram&quot;, &quot;role&quot;: &quot;client-proxy&quot;, &quot;chat_id&quot;: &quot;1001&quot;, &quot;client&quot;: &quot;Acme Corp&quot;, &quot;chat_type&quot;: &quot;private&quot;, &quot;tool&quot;: &quot;compute_invoice&quot;, &quot;arguments&quot;: {&quot;project&quot;: &quot;Northwind&quot;, &quot;month&quot;: &quot;2026-08&quot;}, &quot;decision&quot;: &quot;deny&quot;, &quot;reason&quot;: &quot;project_not_allowed&quot;}
 </code></pre>
-<p><strong>Shoda s očekáváním (7.2):</strong> všech třináct případů V1–V13 dopadlo tak, jak
-bylo zapsáno předem.</p>
+<p>Z V21 (týž klient ze skupiny, potom ze soukromého chatu) a V22 (vlastník
+přes Telegram):</p>
+<pre><code class="language-json">{&quot;ts&quot;: &quot;2026-10-15T16:37:23.353+00:00&quot;, &quot;service&quot;: &quot;n8n-telegram&quot;, &quot;role&quot;: &quot;client-proxy&quot;, &quot;chat_id&quot;: &quot;1001&quot;, &quot;client&quot;: null, &quot;chat_type&quot;: &quot;group&quot;, &quot;tool&quot;: &quot;compute_invoice&quot;, &quot;arguments&quot;: {&quot;project&quot;: &quot;ACME&quot;, &quot;month&quot;: &quot;2026-08&quot;}, &quot;decision&quot;: &quot;deny&quot;, &quot;reason&quot;: &quot;chat_not_private&quot;}
+{&quot;ts&quot;: &quot;2026-10-15T16:37:23.493+00:00&quot;, &quot;service&quot;: &quot;n8n-telegram&quot;, &quot;role&quot;: &quot;client-proxy&quot;, &quot;chat_id&quot;: &quot;1001&quot;, &quot;client&quot;: &quot;Acme Corp&quot;, &quot;chat_type&quot;: &quot;private&quot;, &quot;tool&quot;: &quot;compute_invoice&quot;, &quot;arguments&quot;: {&quot;project&quot;: &quot;ACME&quot;, &quot;month&quot;: &quot;2026-08&quot;}, &quot;decision&quot;: &quot;allow&quot;, &quot;reason&quot;: &quot;client_scoped&quot;}
+{&quot;ts&quot;: &quot;2026-10-15T16:37:23.591+00:00&quot;, &quot;service&quot;: &quot;n8n-telegram&quot;, &quot;role&quot;: &quot;owner&quot;, &quot;chat_id&quot;: &quot;7007&quot;, &quot;client&quot;: null, &quot;chat_type&quot;: &quot;private&quot;, &quot;tool&quot;: &quot;capacity_check&quot;, &quot;arguments&quot;: {&quot;month&quot;: &quot;2026-08&quot;}, &quot;decision&quot;: &quot;allow&quot;, &quot;reason&quot;: &quot;owner&quot;}
+</code></pre>
+<p><strong>Shoda s očekáváním (7.2):</strong> všech osmnáct případů V1–V13 a V21–V25
+dopadlo tak, jak bylo zapsáno předem. U V25 se očekávání opravilo ještě
+před spuštěním: <code>"Acme"</code> se shoduje s id <code>ACME</code> (bez ohledu na velikost
+písmen), nejednoznačný je až <code>"Acme —"</code>.</p>
 <h3>Kontrola, že test opravdu testuje gate</h3>
 <p>Zelený test sám nedokazuje, že kontrolu vykonává gate. Data by mohla chybět
 z jiného důvodu. Proto dvě kontroly navíc, doplněné po prvním běhu:</p>
@@ -1562,17 +1711,21 @@ z jiného důvodu. Proto dvě kontroly navíc, doplněné po prvním běhu:</p>
 </ol>
 <p><code>bash
    uv run pytest --gate-off</code></p>
-<p>Výsledek: <code>9 failed, 5 passed</code>. Padly všechny případy, kde má gate
-   zastavit cizí data (V2–V7, V11–V13), s cizími daty přímo ve výstupu:</p>
+<p>Výsledek: <code>12 failed, 7 passed</code>. Padly všechny případy, kde má gate
+   zastavit data (V2–V7, V11–V13, V21, V23, V25), s daty přímo ve výstupu:</p>
 <p><code>text
    FAILED test_v2 … {'project': 'NWND', … 'client': 'Northwind Trading', …}
    FAILED test_v4 … {'dimension': 'client', 'date_from': '2026-05-01', 'date_to': '2026-08-31', 'total_hours': 619.0, …}
    FAILED test_v5 … 'Projekt 'XYZ' neexistuje. Dostupné: ACME (Acme Corp), NWND (Northwind Trading), GLBX (Globex), INIT (Initech), …'
    FAILED test_v11 … Extra items in the left set: 'INIT', …
-   FAILED test_v13 … 'Data jsou k dispozici od 2026-05-01 do 2026-09-30. …'</code></p>
-<p>V4 bez gate vrátí souhrn hodin přes všechny klienty. Prošly legitimní
-   případy V0, V1, V10 a případy V8 a V9, které hlídá samostatná vrstva
-   před <code>/mcp</code>, ne gate.</p>
+   FAILED test_v13 … 'Data jsou k dispozici od 2026-05-01 do 2026-09-30. …'
+   FAILED test_v21 … group … {'project': 'ACME', … 'client': 'Acme Corp', 'month': '2026-08', …}
+   FAILED test_v23 … {'project': 'NWND', … 'client': 'Northwind Trading', …}</code></p>
+<p>V4 bez gate vrátí souhrn hodin přes všechny klienty, V21 vydá fakturu
+   Acme do skupiny. V25 bez gate padá na chybějícím zamítnutí, ne na úniku:
+   hláška knihovny o nejednoznačnosti tu náhodou vypíše jen projekty Acme.
+   Prošly legitimní případy V0, V1, V10, V22 a případy V8, V9 a V24, které
+   hlídá samostatná vrstva před <code>/mcp</code>, ne gate.</p>
 <h2>7.6 Proč důkaz odpovídá hrozbě</h2>
 <p>T2 je únik dat jiného klienta, ke kterému dojde, protože identitu určuje
 text zprávy. Test proto:</p>
@@ -1587,12 +1740,18 @@ text zprávy. Test proto:</p>
 <li>jde přes <strong>skutečný MCP protokol přes HTTP</strong>, stejnou cestou jako n8n
   a ostatní klienti. Proto pokrývá i T4: bez tokenu se k nástroji nedostane
   nikdo (V8);</li>
-<li>ověřuje <strong>fail closed</strong> (V9) a <strong>revokaci bez restartu</strong> (V12).</li>
+<li>uzná identitu <strong>jen ze soukromého chatu</strong> (V21, V23), protože ve skupině
+  <code>chat.id</code> neoznačuje člověka;</li>
+<li>ověřuje <strong>fail closed</strong> (V9, V24: bez politiky nebo bez auditu se nevydá
+  nic) a <strong>revokaci bez restartu</strong> (V12).</li>
 </ul>
 <h2>7.7 Co tento důkaz nepokrývá</h2>
 <ul>
-<li><strong>n8n:</strong> že workflow skutečně posílá <code>chat.id</code> v hlavičce a že MCP uzel
-  hlavičku z dat triggeru umí nastavit. Ověří se při nasazení (kap. 4.2).</li>
+<li><strong>n8n:</strong> že workflow skutečně posílá <code>chat.id</code> a <code>chat.type</code> v hlavičkách
+  a že MCP uzel hlavičky z dat triggeru umí nastavit. Ověří se při nasazení
+  (kap. 4.2, V14).</li>
+<li><strong>Oprávnění jednotlivých osob:</strong> gate rozlišuje klienty, ne lidi uvnitř
+  klienta (kap. 1.4).</li>
 <li><strong>Telegram:</strong> pravost <code>chat.id</code> stojí na důvěře v Telegram API a v bot token.</li>
 <li><strong>Model:</strong> chování modelu se netestuje vůbec. Injection (T3) uvnitř dat
   téhož klienta zůstává.</li>
@@ -1605,7 +1764,8 @@ text zprávy. Test proto:</p>
   401. Konfiguraci klientů test neověřuje.</li>
 <li><strong>REST API z HW2 a .NET proxy:</strong> gate je nechrání, v rozšíření nemají běžet (M3).</li>
 <li><strong>Integrita auditního logu:</strong> zápis je jen append do souboru, bez ochrany
-  proti přepsání.</li>
+  proti přepsání. Test ověřuje, že bez logu se nic nevydá (V24), ne že log
+  nejde zpětně upravit.</li>
 </ul></section></main>
 <script>
 (function () {

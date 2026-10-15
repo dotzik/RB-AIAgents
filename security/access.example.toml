@@ -9,6 +9,11 @@
 #   owner         vše jako dnes (agenti a LangFlow vlastníka)
 #   client-proxy  jen za klienta podle hlavičky X-Timeagent-Chat-Id (n8n Telegram)
 
+# Telegram chat_id vlastníka: přes n8n dostane roli owner (vidí vše).
+# Nesmí být zároveň v [clients]. Identita platí jen ze soukromého chatu
+# (hlavička X-Timeagent-Chat-Type = private), ve skupině nikdo nic nedostane.
+owner_chat_ids = ["7007"]
+
 [services.n8n-telegram]
 token_sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
 role = "client-proxy"

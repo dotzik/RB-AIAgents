@@ -20,7 +20,7 @@ from starlette.routing import Route
 from timeagent import tools
 from timeagent_mcp.server import DEFAULT_ALLOWED_HOSTS, TOOLS, health
 
-from .gate import audit, authorize, filter_result, visible_tools
+from .gate import AuditError, audit, audit_path, authorize, filter_result, visible_tools
 from .policy import Identity, PolicyError, load_policy, resolve_identity
 
 SERVER_NAME = "timeagent"
@@ -62,10 +62,16 @@ async def on_call_tool(
         identity = _identity(ctx)
         decision = authorize(identity, params.name, arguments)
     except Exception:  # noqa: BLE001 — chyba v gate = zamítnutí (fail closed)
-        audit(None, params.name, arguments, False, "gate_error")
+        try:
+            audit(None, params.name, arguments, False, "gate_error")
+        except AuditError:
+            pass
         return _result({"error": "Přístup zamítnut.", "denied": "gate_error"})
 
-    audit(identity, params.name, arguments, decision.allowed, decision.reason)
+    try:
+        audit(identity, params.name, arguments, decision.allowed, decision.reason)
+    except AuditError:  # bez záznamu se nic nevydá
+        return _result({"error": "Služba není dostupná.", "denied": "audit_unavailable"})
     if not decision.allowed:
         return _result({"error": decision.message, "denied": decision.reason})
 
@@ -98,14 +104,26 @@ class AuthLayer:
             await self.app(scope, receive, send)
             return
         headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope["headers"]}
+        unavailable = JSONResponse({"error": "Služba není dostupná."}, status_code=503)
+        try:
+            audit_path()
+        except AuditError:  # bez auditu se neobsluhuje nikdo (fail closed)
+            await unavailable(scope, receive, send)
+            return
         try:
             identity = resolve_identity(load_policy(), headers)
         except PolicyError:
-            audit(None, None, None, False, "policy_unavailable")
-            await JSONResponse({"error": "Služba není dostupná."}, status_code=503)(scope, receive, send)
+            try:
+                audit(None, None, None, False, "policy_unavailable")
+            except AuditError:
+                pass
+            await unavailable(scope, receive, send)
             return
         if identity is None:
-            audit(None, None, None, False, "unauthenticated")
+            try:
+                audit(None, None, None, False, "unauthenticated")
+            except AuditError:
+                pass
             await JSONResponse(
                 {"error": "Chybí nebo neplatí token."},
                 status_code=401,

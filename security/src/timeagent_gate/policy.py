@@ -18,6 +18,10 @@ from pathlib import Path
 from typing import Mapping
 
 CHAT_ID_HEADER = "x-timeagent-chat-id"
+# Typ chatu z Telegram updatu (`message.chat.type`). Ve skupině je `chat.id`
+# id skupiny, ne člověka, proto identitu uznáme jen v soukromém chatu.
+CHAT_TYPE_HEADER = "x-timeagent-chat-type"
+PRIVATE_CHAT = "private"
 ROLES = {"owner", "client-proxy"}
 
 
@@ -36,6 +40,7 @@ class Service:
 class Policy:
     services: tuple[Service, ...]
     clients: Mapping[str, str]  # chat_id -> projects.client
+    owner_chat_ids: frozenset[str] = frozenset()  # vlastník přes Telegram
 
 
 @dataclass(frozen=True)
@@ -44,6 +49,7 @@ class Identity:
     role: str
     chat_id: str | None = None
     client: str | None = None  # vyplněno jen pro ověřeného klienta
+    chat_type: str | None = None
 
 
 def policy_path() -> Path:
@@ -68,7 +74,10 @@ def load_policy(path: Path | None = None) -> Policy:
             raise PolicyError(f"služba {name!r}: neplatná role nebo hash tokenu")
         services.append(Service(name, digest, role))
     clients = {str(k): str(v) for k, v in (data.get("clients") or {}).items()}
-    return Policy(tuple(services), clients)
+    owners = frozenset(str(c) for c in (data.get("owner_chat_ids") or []))
+    if owners & clients.keys():
+        raise PolicyError("chat_id nesmí být zároveň vlastník i klient")
+    return Policy(tuple(services), clients, owners)
 
 
 def hash_token(token: str) -> str:
@@ -94,5 +103,11 @@ def resolve_identity(policy: Policy, headers: Mapping[str, str]) -> Identity | N
     if service.role == "owner":
         return Identity(service.name, service.role)
     chat_id = (headers.get(CHAT_ID_HEADER) or "").strip() or None
+    chat_type = (headers.get(CHAT_TYPE_HEADER) or "").strip().lower() or None
+    if chat_type != PRIVATE_CHAT:
+        # Bez soukromého chatu nevíme, kdo píše: nikdo, ani vlastník.
+        return Identity(service.name, service.role, chat_id, None, chat_type)
+    if chat_id in policy.owner_chat_ids:
+        return Identity(service.name, "owner", chat_id, None, chat_type)
     client = policy.clients.get(chat_id) if chat_id else None
-    return Identity(service.name, service.role, chat_id, client)
+    return Identity(service.name, service.role, chat_id, client, chat_type)

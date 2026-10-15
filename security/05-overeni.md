@@ -37,6 +37,11 @@ gate by seznam obsahoval cizí projekty.
 | V11 | legitimní | klient A, `list_projects` | jen projekty Acme | seznam = projekty Acme z DB |
 | V12 | revokace | `chat_id` klienta A se za běhu odebere z politiky | další volání zamítnuto, bez restartu | žádná data po revokaci |
 | V13 | zakázaný | klient A, vlastní projekt za měsíc bez dat | povoleno, nula a poznámka | poznámka uvádí rozsah dat jen z projektů Acme, ne datum záznamu Northwindu mimo něj |
+| V21 | zakázaný | klient A ze skupiny, supergroup, kanálu nebo bez typu chatu | zamítnuto; ze soukromého chatu povoleno | žádná data; audit `deny`, `chat_not_private` |
+| V22 | legitimní | vlastník přes Telegram (`owner_chat_ids`), `compute_invoice` cizího projektu a `capacity_check` | povoleno | výsledek = volání bez gate; audit `role: owner` s jeho `chat_id` |
+| V23 | zakázaný | vlastník ze skupiny | zamítnuto | žádná data |
+| V24 | chybový | auditní log není nastavený | HTTP 503 | nástroj se nezavolá ani pro `owner` |
+| V25 | zakázaný | klient A, část názvu, která sedí na dva jeho projekty | zamítnuto jako nejednoznačné | hláška nabídne jen vlastní projekty |
 
 **Proč to odpovídá hrozbě:** T2 je únik dat jiného klienta. Test proto
 kontroluje obsah odpovědi proti databázi (cizí data nesmí být nikde ve
@@ -47,7 +52,7 @@ výsledku), ne jen návratový kód. Nástroje jsou read-only, takže zakázaný
 
 | # | Opatření | Zakázaný případ | Legitimní případ | Očekávaný výsledek |
 |---|---|---|---|---|
-| V14 | M2 | zpráva z účtu mimo allowlist | zpráva z povoleného účtu | cizí bez odpovědi, v n8n běh končí v uzlu Allowlist; povolený dostane odpověď |
+| V14 | M2 | zpráva z účtu mimo allowlist; zpráva ze skupiny, kde je povolený účet | zpráva z povoleného účtu v soukromém chatu | cizí i skupina bez odpovědi, v n8n běh končí v uzlu Allowlist; povolený dostane odpověď; n8n posílá na MCP `chat.id` i `chat.type` |
 | V15 | M2 | 15 zpráv za minutu | 3 zprávy | od 11. zprávy zahozeno |
 | V16 | M3 | `curl` na MCP z hostitele bez tokenu; port REST API; port původního MCP serveru HW3 | volání přes n8n | 401 / spojení odmítnuto; n8n funguje |
 | V17 | M4 | přihlášení do n8n výchozím heslem; LangFlow bez přihlášení; Code node čte `$env` | přihlášení správným heslem | odmítnuto ve všech třech |
@@ -59,7 +64,7 @@ výsledku), ne jen návratový kód. Nástroje jsou read-only, takže zakázaný
 
 | Opatření | Stav evidence |
 |---|---|
-| M1 | **získáno v kap. 7**: výstup testu V0–V13 a běh s vypnutým gate |
+| M1 | **získáno v kap. 7**: výstup testu V0–V13 a V21–V25 a běh s vypnutým gate |
 | M2–M7 | plánovaná, ověří se při nasazení na Proxmox podle V14–V20 |
 
 Regresní pravidlo: test M1 musí projít před každou změnou nástrojů, politiky

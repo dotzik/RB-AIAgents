@@ -8,7 +8,7 @@ lokální stav. Škála: nízká, střední, vysoká.
 | Pořadí | ID | Pravděpodobnost | Dopad | Odůvodnění |
 |---|---|---|---|---|
 | 1 | **T2** | vysoká | vysoký | Nepotřebuje útočníka. Stačí běžná otázka bez projektu („kolik jsme celkem odpracovali“) a nástroj sečte všechny klienty. Únik mezi klienty přímo porušuje NDA. Je to jádro rozšíření: bez řešení T2 nejde scénář vůbec spustit. |
-| 2 | **T1** | vysoká | vysoký | Telegram boti jsou dohledatelní podle jména. Bez allowlistu je T1 ještě horší než T2, protože útočník nemusí být klient. Řeší ho tatáž kontrola identity jako T2. |
+| 2 | **T1** | vysoká | vysoký | Telegram boti jsou dohledatelní podle jména a útočník nemusí být klient. Dopad je tedy ještě širší než u T2, ale vyžaduje, aby bota někdo cizí našel a zkoušel. T2 nastane i bez útočníka, běžným dotazem, proto je první. Obě řeší tatáž kontrola identity. |
 | 3 | **T4** | střední (dnes nízká) | vysoký | Dnes je vše jen na loopbacku notebooku. Na Proxmoxu ale stačí jedna chyba v publikování portu nebo kompromitovaný kontejner. Rozhoduje to, **kde** se kontrola vynucuje: kontrola jen v n8n by T4 nechala otevřené. |
 | 4 | **T3** | střední | střední | Popisy píše dodavatel sám, ale export je soubor mimo kontrolu systému. Po vyřešení T2 v nástrojích je dopad omezený na data téhož klienta. Injection pak nemá kam eskalovat. |
 | 5 | **T5** | nízká | vysoký | Odposlech vyžaduje útočníka v domácí LAN, únik k cizímu poskytovateli vědomou změnu konfigurace. Dopad je ale nevratný. Řeší se šifrovaným spojením a kontrolou adresy modelu při startu, ne gate. |

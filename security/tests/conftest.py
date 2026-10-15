@@ -30,10 +30,13 @@ TOKENS = {
 }
 CLIENT_A = "1001"  # Acme Corp
 CLIENT_B = "2002"  # Northwind Trading
+OWNER = "7007"  # vlastník přes Telegram
 
 
-def write_policy(path: Path, clients: dict[str, str]) -> None:
+def write_policy(path: Path, clients: dict[str, str], owners: tuple[str, ...] = (OWNER,)) -> None:
     lines = [
+        "owner_chat_ids = [" + ", ".join(f'"{o}"' for o in owners) + "]",
+        "",
         "[services.n8n-telegram]",
         f'token_sha256 = "{hash_token(TOKENS["n8n-telegram"])}"',
         'role = "client-proxy"',
@@ -121,7 +124,12 @@ def server_url():
     thread.join(timeout=5)
 
 
-def headers(service: str | None, chat_id: str | None = None, token: str | None = None) -> dict[str, str]:
+def headers(
+    service: str | None, chat_id: str | None = None, token: str | None = None,
+    chat_type: str | None = "private",
+) -> dict[str, str]:
+    """Hlavičky, jak je v provozu nastaví n8n z Telegram updatu.
+    Typ chatu se posílá jen s `chat_id`; `chat_type=None` ho vynechá."""
     h: dict[str, str] = {}
     if token is not None:
         h["Authorization"] = f"Bearer {token}"
@@ -129,6 +137,8 @@ def headers(service: str | None, chat_id: str | None = None, token: str | None =
         h["Authorization"] = f"Bearer {TOKENS[service]}"
     if chat_id is not None:
         h["X-Timeagent-Chat-Id"] = chat_id
+        if chat_type is not None:
+            h["X-Timeagent-Chat-Type"] = chat_type
     return h
 
 

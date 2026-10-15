@@ -1,4 +1,4 @@
-"""Test mitigace M1: autorizační gate v MCP serveru (kap. 7, případy V0–V13).
+"""Test mitigace M1: autorizační gate v MCP serveru (kap. 7, případy V0–V13 a V21–V25).
 
 Kontroluje se obsah odpovědi proti databázi a auditní log, ne text hlášky.
 Zakázaný „side effect“ read-only nástrojů je předání cizích dat.
@@ -14,7 +14,7 @@ from mcp.client.streamable_http import streamable_http_client
 from timeagent import tools
 
 from conftest import (
-    CLIENT_A, CLIENT_B, DEFAULT_CLIENTS, FOREIGN_LAST_DAY, audit_records, call, headers, write_policy,
+    CLIENT_A, CLIENT_B, DEFAULT_CLIENTS, FOREIGN_LAST_DAY, OWNER, audit_records, call, headers, write_policy,
 )
 
 # Cokoli z toho v odpovědi klientovi A = únik cizích dat.
@@ -207,3 +207,60 @@ async def test_v13_prazdny_vysledek_neprozradi_rozsah_cizich_dat(env, server_url
     assert own_last < FOREIGN_LAST_DAY
     assert f"do {own_last}" in payload["note"]
     assert FOREIGN_LAST_DAY not in json.dumps(payload)
+
+
+async def test_v21_identitu_uzna_jen_soukromy_chat(env, server_url):
+    """Ve skupině je `chat.id` id skupiny: data klienta by viděli všichni členové."""
+    args = {"project": "ACME", "month": "2026-08"}
+    for chat_type in ("group", "supergroup", "channel", None):
+        payload = await call(server_url, "compute_invoice", args,
+                             service="n8n-telegram", chat_id=CLIENT_A, chat_type=chat_type)
+
+        assert payload.get("denied") == "chat_not_private", chat_type
+        assert "billable_hours" not in payload
+        assert _last(env)["decision"] == "deny"
+    private = await call(server_url, "compute_invoice", args,
+                         service="n8n-telegram", chat_id=CLIENT_A, chat_type="private")
+    assert private["billable_hours"] == _billable_hours(env["db"], "ACME", "2026-08")
+
+
+async def test_v22_vlastnik_pres_telegram_vidi_vse(env, server_url):
+    for tool, args in (("compute_invoice", {"project": "NWND", "month": "2026-08"}),
+                       ("capacity_check", {"month": "2026-08"})):
+        payload = await call(server_url, tool, args, service="n8n-telegram", chat_id=OWNER)
+
+        assert payload == tools.call_tool(tool, args)
+        record = _last(env)
+        assert (record["role"], record["chat_id"], record["decision"]) == ("owner", OWNER, "allow")
+
+
+async def test_v23_vlastnik_ve_skupine_je_zamitnut(env, server_url):
+    payload = await call(server_url, "compute_invoice", {"project": "NWND", "month": "2026-08"},
+                         service="n8n-telegram", chat_id=OWNER, chat_type="group")
+
+    assert payload.get("denied") == "chat_not_private"
+    assert "billable_hours" not in payload
+
+
+async def test_v24_bez_auditu_nic_nevyda(env, server_url, monkeypatch):
+    monkeypatch.delenv("TIMEAGENT_AUDIT_LOG")
+    async with httpx2.AsyncClient(headers=headers("owner-cli"), timeout=10) as http:
+        response = await http.post(
+            server_url,
+            json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                  "params": {"name": "compute_invoice",
+                             "arguments": {"project": "NWND", "month": "2026-08"}}},
+        )
+
+    assert response.status_code == 503
+    assert "billable_hours" not in response.text
+
+
+async def test_v25_nejednoznacny_nazev_jen_mezi_vlastnimi(env, server_url):
+    payload = await call(server_url, "compute_invoice", {"project": "Acme —", "month": "2026-08"},
+                         service="n8n-telegram", chat_id=CLIENT_A)
+
+    assert payload.get("denied") == "project_ambiguous"
+    assert "ACME" in payload["error"] and "ACM2" in payload["error"]
+    assert "billable_hours" not in payload
+    assert _leaks(payload) == []

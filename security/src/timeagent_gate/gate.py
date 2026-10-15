@@ -18,7 +18,7 @@ from typing import Any
 
 from timeagent import db, tools
 
-from .policy import Identity
+from .policy import PRIVATE_CHAT, Identity
 
 # Nástroje, které klient smí volat, a zda vyžadují projekt.
 CLIENT_TOOLS = {
@@ -69,6 +69,8 @@ def authorize(identity: Identity | None, name: str, arguments: dict[str, Any]) -
         return Decision(False, "unknown_role", message="Přístup zamítnut.")
     if identity.chat_id is None:
         return Decision(False, "missing_chat_id", message="Chybí identita uživatele.")
+    if identity.chat_type != PRIVATE_CHAT:
+        return Decision(False, "chat_not_private", message="Dotazy jen v soukromém chatu s botem.")
     if identity.client is None:
         return Decision(False, "unknown_chat_id", message="Tento účet nemá přístup.")
 
@@ -143,21 +145,35 @@ def visible_tools(identity: Identity | None, names: list[str]) -> list[str]:
     return [n for n in names if n in CLIENT_TOOLS]
 
 
+class AuditError(Exception):
+    """Audit nejde zapsat. Server pak nic nevydá (fail closed)."""
+
+
+def audit_path() -> Path:
+    raw = os.environ.get("TIMEAGENT_AUDIT_LOG")
+    if not raw:
+        raise AuditError("TIMEAGENT_AUDIT_LOG není nastavená")
+    return Path(raw)
+
+
 def audit(identity: Identity | None, tool: str | None, arguments: Any, allowed: bool, reason: str) -> None:
-    """Jeden řádek JSON na rozhodnutí. Bez cesty v env se neloguje."""
-    path = os.environ.get("TIMEAGENT_AUDIT_LOG")
-    if not path:
-        return
+    """Jeden řádek JSON na rozhodnutí. Bez auditu se nic nevydá: chybějící
+    cesta nebo chyba zápisu vyhodí `AuditError`."""
+    path = audit_path()
     record = {
         "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
         "service": identity.service if identity else None,
         "role": identity.role if identity else None,
         "chat_id": identity.chat_id if identity else None,
         "client": identity.client if identity else None,
+        "chat_type": identity.chat_type if identity else None,
         "tool": tool,
         "arguments": arguments,
         "decision": "allow" if allowed else "deny",
         "reason": reason,
     }
-    with Path(path).open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+    try:
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except OSError as exc:
+        raise AuditError(f"audit nejde zapsat: {type(exc).__name__}") from None
