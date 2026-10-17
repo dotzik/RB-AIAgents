@@ -29,6 +29,12 @@ a `db.py`), kterou MCP server importuje. Odkazy do `HW1/` míří na ni.
 - **Důkaz:** test přes skutečný MCP protokol nad syntetickými daty, 19/19
   prošlo. S vypnutým gate (`--gate-off`) padá všech 12 případů, kde má gate
   zastavit data, a data jsou přímo ve výstupu.
+- **Supply chain (T9, M8, zavedeno):** závislosti zamčené hashem, image
+  digestem, NuGet jen z nuget.org, karanténa nových verzí 7 dní, digest
+  modelu. CI audituje při každém push a každý týden, test supply chain
+  10/10. První audit našel CVE-2026-59951 v `mcp` a dalších šest
+  zranitelných balíčků; opraveno, jedna zdůvodněná výjimka. Otevřené:
+  n8n 2.38.3 má 32 kritických nálezů v image.
 
 ```bash
 cd security && uv sync && uv run pytest -v

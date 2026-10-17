@@ -208,7 +208,7 @@ text zprávy. Test proto:
 - **Model:** chování modelu se netestuje vůbec. Injection (T3) uvnitř dat
   téhož klienta zůstává.
 - **Kompromitace n8n nebo tokenu `owner`:** gate jim věří.
-- **Ostatní mitigace M2–M7:** jen plán ověření V14–V20.
+- **Ostatní mitigace M2–M7:** jen plán ověření V14–V20. M8 je zavedená v repu a ověřená (V26–V37, kap. 4.4 a 5.3), otevřený zůstává upgrade n8n.
 - **Souběh s původním serverem:** gate chrání jen tehdy, když server z HW3
   bez gate neběží (M3, ověří V16).
 - **Tokeny agentů a LangFlow:** dnes se k MCP připojují bez tokenu. Po

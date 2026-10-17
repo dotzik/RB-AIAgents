@@ -59,6 +59,11 @@ flowchart LR
 
   OLL["Ollama na LAN<br/>plain HTTP"]
 
+  subgraph REG["Registry — B6"]
+    PKG["PyPI, NuGet,<br/>Docker Hub, MCR"]
+    OREG["registr modelů Ollama"]
+  end
+
   TG -->|zpráva| TGAPI
   N8N -->|getUpdates à 5 s, bot token| TGAPI
   N8N -->|MCP| MCP
@@ -72,6 +77,8 @@ flowchart LR
   N8N -->|prompt + výsledky nástrojů| OLL
   LF --> OLL
   AG --> OLL
+  PKG -.->|build image, uv sync, dotnet restore| HOST
+  OREG -.->|ollama pull| OLL
 ```
 
 **Trust boundaries:**
@@ -83,6 +90,7 @@ flowchart LR
 | B3 | služby v síti → MCP | jakékoli volání nástroje, bez prokázání identity |
 | B4 | zdroj výkazů → databáze | popisy výkazů jako volný text, později se dostanou do kontextu modelu |
 | B5 | hostitel → model | prompt a výsledky nástrojů včetně popisů a sazeb, přes LAN bez šifrování |
+| B6 | dodavatelé → build a běh | kód balíčků (PyPI, NuGet), Docker image, váhy modelu z registru Ollamy; běží uvnitř všech ostatních hranic |
 
 ## 1.4 Co je fakt, co předpoklad, co mimo rozsah
 
@@ -110,6 +118,14 @@ flowchart LR
 | Logy | audit chybí; n8n drží historii běhů bez retence | — |
 | Systémový prompt | pravidla proti vymýšlení čísel, nic proti injection ani k důvěrnosti; společný pro agenty HW3 | `HW3/agents/system_prompt.json` (generovaný z `HW1/src/timeagent/agent.py`) |
 | Testy | 106 + 7 + 6, žádný bezpečnostní | — |
+| Python závislosti v image | **před M8:** `requirements.txt` připínal jen přímé balíčky (`mcp==2.1.1`), tranzitivní ne, `pip install` bez hashů. **Teď:** zámek s hashi z `requirements.in`, `pip install --require-hashes --no-deps` | `HW3/mcp/`, `HW2/api/` |
+| Python projekty | `uv.lock` s hashi, karanténa `exclude-newer = "7 days"` v `[tool.uv]` | 5× `pyproject.toml` |
+| Base image, n8n, LangFlow | **před M8:** jen tag. **Teď:** tag + digest (`@sha256:…`) | Dockerfile, `HW2/docker-compose.yml` |
+| n8n uzly | jen vestavěné (`n8n-nodes-base.*`, `@n8n/n8n-nodes-langchain.*`), community balíčky vypnuté | `build_n8n_workflow.py`, compose |
+| NuGet | **před M8:** bez lockfile a bez `nuget.config`, restore bral i soukromé feedy z jiných projektů v globální konfiguraci stroje. **Teď:** `nuget.config` jen s nuget.org, `packages.lock.json`, `--locked-mode` | `HW3/mcp-dotnet/`, `HW3/agents/dotnet/` |
+| Model | tag `qwen2.5:32b` + `OLLAMA_MODEL_DIGEST`, kontrola `security/check_model.py` | `.env.example` |
+| Image serveru s gate | zatím neexistuje, gate běží přes `uv run` z `security/`; vzor pro image je `HW3/mcp/Dockerfile` | `security/` |
+| Model | podle tagu `qwen2.5:32b` z registru Ollamy, digest se nekontroluje | `.env` |
 
 **Fakta z provozu**
 

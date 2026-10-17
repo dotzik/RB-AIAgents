@@ -85,6 +85,12 @@ a <code>db.py</code>), kterou MCP server importuje. Odkazy do <code>HW1/</code> 
 <li><strong>Důkaz:</strong> test přes skutečný MCP protokol nad syntetickými daty, 19/19
   prošlo. S vypnutým gate (<code>--gate-off</code>) padá všech 12 případů, kde má gate
   zastavit data, a data jsou přímo ve výstupu.</li>
+<li><strong>Supply chain (T9, M8, zavedeno):</strong> závislosti zamčené hashem, image
+  digestem, NuGet jen z nuget.org, karanténa nových verzí 7 dní, digest
+  modelu. CI audituje při každém push a každý týden, test supply chain
+  10/10. První audit našel CVE-2026-59951 v <code>mcp</code> a dalších šest
+  zranitelných balíčků; opraveno, jedna zdůvodněná výjimka. Otevřené:
+  n8n 2.38.3 má 32 kritických nálezů v image.</li>
 </ul>
 <pre><code class="language-bash">cd security &amp;&amp; uv sync &amp;&amp; uv run pytest -v
 </code></pre>
@@ -241,6 +247,11 @@ Telegram účtu.</p>
 
   OLL[&quot;Ollama na LAN&lt;br/&gt;plain HTTP&quot;]
 
+  subgraph REG[&quot;Registry — B6&quot;]
+    PKG[&quot;PyPI, NuGet,&lt;br/&gt;Docker Hub, MCR&quot;]
+    OREG[&quot;registr modelů Ollama&quot;]
+  end
+
   TG --&gt;|zpráva| TGAPI
   N8N --&gt;|getUpdates à 5 s, bot token| TGAPI
   N8N --&gt;|MCP| MCP
@@ -254,6 +265,8 @@ Telegram účtu.</p>
   N8N --&gt;|prompt + výsledky nástrojů| OLL
   LF --&gt; OLL
   AG --&gt; OLL
+  PKG -.-&gt;|build image, uv sync, dotnet restore| HOST
+  OREG -.-&gt;|ollama pull| OLL
 </pre></div>
 <p><strong>Trust boundaries:</strong></p>
 <div class="tbl"><table>
@@ -289,6 +302,11 @@ Telegram účtu.</p>
 <td>B5</td>
 <td>hostitel → model</td>
 <td>prompt a výsledky nástrojů včetně popisů a sazeb, přes LAN bez šifrování</td>
+</tr>
+<tr>
+<td>B6</td>
+<td>dodavatelé → build a běh</td>
+<td>kód balíčků (PyPI, NuGet), Docker image, váhy modelu z registru Ollamy; běží uvnitř všech ostatních hranic</td>
 </tr>
 </tbody>
 </table></div>
@@ -403,6 +421,46 @@ Telegram účtu.</p>
 <td>106 + 7 + 6, žádný bezpečnostní</td>
 <td>—</td>
 </tr>
+<tr>
+<td>Python závislosti v image</td>
+<td><strong>před M8:</strong> <code>requirements.txt</code> připínal jen přímé balíčky (<code>mcp==2.1.1</code>), tranzitivní ne, <code>pip install</code> bez hashů. <strong>Teď:</strong> zámek s hashi z <code>requirements.in</code>, <code>pip install --require-hashes --no-deps</code></td>
+<td><code>HW3/mcp/</code>, <code>HW2/api/</code></td>
+</tr>
+<tr>
+<td>Python projekty</td>
+<td><code>uv.lock</code> s hashi, karanténa <code>exclude-newer = "7 days"</code> v <code>[tool.uv]</code></td>
+<td>5× <code>pyproject.toml</code></td>
+</tr>
+<tr>
+<td>Base image, n8n, LangFlow</td>
+<td><strong>před M8:</strong> jen tag. <strong>Teď:</strong> tag + digest (<code>@sha256:…</code>)</td>
+<td>Dockerfile, <code>HW2/docker-compose.yml</code></td>
+</tr>
+<tr>
+<td>n8n uzly</td>
+<td>jen vestavěné (<code>n8n-nodes-base.*</code>, <code>@n8n/n8n-nodes-langchain.*</code>), community balíčky vypnuté</td>
+<td><code>build_n8n_workflow.py</code>, compose</td>
+</tr>
+<tr>
+<td>NuGet</td>
+<td><strong>před M8:</strong> bez lockfile a bez <code>nuget.config</code>, restore bral i soukromé feedy z jiných projektů v globální konfiguraci stroje. <strong>Teď:</strong> <code>nuget.config</code> jen s nuget.org, <code>packages.lock.json</code>, <code>--locked-mode</code></td>
+<td><code>HW3/mcp-dotnet/</code>, <code>HW3/agents/dotnet/</code></td>
+</tr>
+<tr>
+<td>Model</td>
+<td>tag <code>qwen2.5:32b</code> + <code>OLLAMA_MODEL_DIGEST</code>, kontrola <code>security/check_model.py</code></td>
+<td><code>.env.example</code></td>
+</tr>
+<tr>
+<td>Image serveru s gate</td>
+<td>zatím neexistuje, gate běží přes <code>uv run</code> z <code>security/</code>; vzor pro image je <code>HW3/mcp/Dockerfile</code></td>
+<td><code>security/</code></td>
+</tr>
+<tr>
+<td>Model</td>
+<td>podle tagu <code>qwen2.5:32b</code> z registru Ollamy, digest se nekontroluje</td>
+<td><code>.env</code></td>
+</tr>
 </tbody>
 </table></div>
 <p><strong>Fakta z provozu</strong></p>
@@ -512,6 +570,13 @@ Telegram účtu.</p>
 <td>—</td>
 <td>únik historie, GDPR</td>
 </tr>
+<tr>
+<td><strong>T9</strong></td>
+<td>Kompromitovaná nebo zranitelná závislost</td>
+<td>autor balíčku, image nebo modelu; převzatý účet v registru</td>
+<td>B6</td>
+<td>kód uvnitř gate, převzetí bota, model s backdoorem</td>
+</tr>
 </tbody>
 </table></div>
 <h2>2.2 Cesty útoku</h2>
@@ -560,6 +625,32 @@ Telegram účtu.</p>
 - <em>Cesta:</em> historie běhů n8n a paměť podle <code>chatId</code> drží dotazy a odpovědi
   s daty klientů neomezeně.
 - <em>Dopad:</em> únik při kompromitaci, porušení minimalizace (GDPR čl. 5).</p>
+<p><strong>T9 · Kompromitovaná nebo zranitelná závislost (supply chain)</strong>
+- <em>Cesta A, balíček:</em> nová verze tranzitivní závislosti <code>mcp</code> nebo
+  <code>uvicorn</code> s podvrženým kódem. <code>pip install</code> v image ji bez lockfile
+  a hashů stáhne při příštím buildu. Kód běží <strong>v procesu MCP serveru,
+  tedy uvnitř gate</strong>, vidí databázi i politiku a gate obejde.
+- <em>Cesta B, známá zranitelnost:</em> připnutá verze zastará. Reálný nález
+  z 2026-10-16: image MCP serveru z HW3 má <code>mcp==2.1.1</code> s CVE-2026-59951
+  (GHSA-84m7-p3x7-pcfv). Stateful Streamable HTTP server nikdy neuvolní
+  session, takže krátkými požadavky jde neomezeně zvětšovat paměť až do
+  pádu. Opraveno ve 2.2.0. Stejný audit našel zranitelné <code>starlette</code> v API z HW2, <code>pyjwt</code>,
+  <code>urllib3</code>, <code>multidict</code>, <code>pydantic-ai-slim</code> a <code>litellm</code> v zámcích agentů
+  a Trivy 32 kritických nálezů v image n8n 2.38.3 (mimo jiné únik ze
+  sandboxu <code>vm2</code>) a 3 v LangFlow 1.12.0 (kap. 5.3).
+- <em>Cesta C, image:</em> <code>python:3.12-slim</code> nebo <code>dotnet/aspnet:10.0</code> je
+  pohyblivý tag, při rebuildu přijde jiný obsah. n8n a LangFlow drží bot
+  token a hesla, jejich image je nejcitlivější. Oba produkty už měly
+  kritické RCE bez přihlášení (např. LangFlow CVE-2025-3248).
+- <em>Cesta C2, záměna zdroje:</em> NuGet restore bere všechny feedy z globální
+  konfigurace stroje. Balíček stejného jména ve feedu, který se projektu
+  netýká, může vyhrát nad nuget.org (dependency confusion).
+- <em>Cesta D, model:</em> <code>ollama pull qwen2.5:32b</code> stáhne, co je pod tagem právě
+  teď. Podvržené nebo přetrénované váhy mohou na spouštěč v textu volat
+  nástroje s cizím projektem nebo zkreslovat odpovědi.
+- <em>Dopad:</em> u A a C plná kompromitace (všechna data, bot token). U B
+  nedostupnost. U D stejný únik jako T3, ale trvalý a bez stopy v datech.
+  OWASP LLM03 Supply Chain, LLM04 Data and Model Poisoning.</p>
 <h2>2.3 Vědomě vyřazeno</h2>
 <div class="tbl"><table>
 <thead>
@@ -576,6 +667,10 @@ Telegram účtu.</p>
 <tr>
 <td>SQL injection</td>
 <td>parametrizované dotazy, <code>dimension</code> z whitelistu (<code>tools.py:201-208</code>, kontrola <code>:219</code>)</td>
+</tr>
+<tr>
+<td>Kompromitace samotného registru (PyPI, Docker Hub, Ollama)</td>
+<td>mimo vliv provozovatele; řeší se tím, co se z registru přijme (M8), ne registrem</td>
 </tr>
 <tr>
 <td>Chybný výpočet faktury modelem</td>
@@ -633,20 +728,27 @@ lokální stav. Škála: nízká, střední, vysoká.</p>
 </tr>
 <tr>
 <td>6</td>
+<td><strong>T9</strong></td>
+<td>nízká (podvržený kód), vysoká (známá zranitelnost)</td>
+<td>vysoký</td>
+<td>Cílený útok na malý projekt je málo pravděpodobný, zastaralá verze je ale skoro jistota: první audit našel CVE v <code>mcp</code>. Podvržený kód v procesu MCP serveru stojí za gate, M1 ho nezastaví. U modelu je to naopak: backdoor ve vahách gate omezí na data téhož klienta. Oprava je levná (lockfile, digesty, audit), proto před T6.</td>
+</tr>
+<tr>
+<td>7</td>
 <td><strong>T6</strong></td>
 <td>nízká (dnes), střední (Proxmox)</td>
 <td>vysoký</td>
 <td>Platí hlavně po přesunu mimo notebook. Než se rozšíření spustí, jde o povinné kroky hardeningu.</td>
 </tr>
 <tr>
-<td>7</td>
+<td>8</td>
 <td><strong>T7</strong></td>
 <td>střední</td>
 <td>nízký</td>
 <td>Po vyřešení T1 píšou botu jen známí klienti. Lokální model nestojí nic navíc. Akceptovatelné s jednoduchým limitem.</td>
 </tr>
 <tr>
-<td>8</td>
+<td>9</td>
 <td><strong>T8</strong></td>
 <td>nízká</td>
 <td>střední</td>
@@ -666,6 +768,8 @@ počítají nástroje.</p>
 - Klienti dostanou přístup i do LangFlow nebo k MCP napřímo. T4 se stane prioritou 1.
 - Export bude obsahovat jména zaměstnanců klienta nebo jiné osobní údaje.
   Dopad T5 a T8 se zvýší kvůli GDPR.
+- MCP endpoint bude dosažitelný z nedůvěryhodné sítě. Známé DoS
+  zranitelnosti (T9, cesta B) se stanou prioritou 3.
 - Na Proxmoxu bude služba publikovaná mimo domácí síť. T6 se stane
   prioritou 2.</p></section><section id="k04" class="tab" hidden><h1>4. Návrh mitigací</h1>
 <h2>4.1 Přehled</h2>
@@ -727,6 +831,13 @@ počítají nástroje.</p>
 <td>Retence konverzací</td>
 <td>T8</td>
 <td>n8n</td>
+<td>vlastník systému</td>
+</tr>
+<tr>
+<td>M8</td>
+<td>Řízené přebírání závislostí (supply chain)</td>
+<td>T9</td>
+<td>build image, start služeb, git</td>
 <td>vlastník systému</td>
 </tr>
 </tbody>
@@ -924,9 +1035,118 @@ deterministický kód před SQL dotazem, model ho nemůže přesvědčit.</p>
 <td>—</td>
 <td>data v zálohách disku</td>
 </tr>
+<tr>
+<td><strong>M8</strong></td>
+<td>Viz 4.4.</td>
+<td>build nebo start selže, nic se nespustí</td>
+<td>podvržený kód už v zamčené verzi; zero-day</td>
+</tr>
 </tbody>
 </table></div>
-<h2>4.4 Pokrytí hrozeb</h2>
+<h2>4.4 M8 · Supply chain</h2>
+<p><strong>Řetězec:</strong> T9 → hranice B6 → co se z registru přijme a jak se to ověří →
+V26–V37 (kap. 5) → zbytkové riziko níže.</p>
+<p>Princip: do buildu i běhu se dostane jen to, co je <strong>zamčené hashem nebo
+digestem v gitu</strong>. Nová verze přijde jen vědomou změnou, která projde
+auditem a testem gate.</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>Vrstva</th>
+<th>Opatření</th>
+<th>Při chybě</th>
+<th>Stav</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Python v image</td>
+<td><code>requirements.in</code> → <code>uv pip compile --generate-hashes</code> → <code>pip install --require-hashes --no-deps</code>. Server s gate má v procesu jen <code>mcp</code> a <code>uvicorn</code>. Spodní hranice <code>mcp&gt;=2.2.0</code> (CVE-2026-59951).</td>
+<td>nesedí hash nebo balíček mimo zámek → build selže</td>
+<td><strong>zavedeno</strong> (<code>HW3/mcp</code>, <code>HW2/api</code>)</td>
+</tr>
+<tr>
+<td>Python projekty</td>
+<td><code>uv.lock</code> s hashi, <code>[tool.uv] exclude-newer = "7 days"</code> v každém <code>pyproject.toml</code>. Karanténa je v konfiguraci, ne na příkazové řádce: <code>--exclude-newer</code> z CLI se uloží do zámku a další <code>uv run</code> bez něj zámek potichu přeřeší.</td>
+<td>novější verze se nevybere</td>
+<td><strong>zavedeno</strong></td>
+</tr>
+<tr>
+<td>Base image, n8n, LangFlow</td>
+<td>Tag + digest (<code>python:3.12-slim@sha256:…</code>, <code>n8nio/n8n:2.38.3@sha256:…</code>). Aktualizace = nový digest v commitu.</td>
+<td>jiný obsah pod tagem se nestáhne</td>
+<td><strong>zavedeno</strong></td>
+</tr>
+<tr>
+<td>n8n</td>
+<td>Jen vestavěné uzly, <code>N8N_COMMUNITY_PACKAGES_ENABLED=false</code>.</td>
+<td>community node nejde nainstalovat</td>
+<td><strong>zavedeno</strong></td>
+</tr>
+<tr>
+<td>NuGet</td>
+<td><code>nuget.config</code> vedle projektů: <code>&lt;clear/&gt;</code>, jen nuget.org, <code>packageSourceMapping</code> <code>*</code>. <code>RestorePackagesWithLockFile</code>, <code>restore --locked-mode</code>, v image <code>RestoreLockedMode=true</code>.</td>
+<td>cizí zdroj se nepoužije; změna grafu → restore selže</td>
+<td><strong>zavedeno</strong></td>
+</tr>
+<tr>
+<td>Model</td>
+<td><code>OLLAMA_MODEL_DIGEST</code> v konfiguraci, <code>security/check_model.py</code> porovná s <code>/api/tags</code>.</td>
+<td>jiný digest, chybějící digest nebo nedostupný server → kód 1, klient nemá startovat</td>
+<td><strong>skript hotový</strong>, napojení do startu pěti klientů při nasazení</td>
+</tr>
+<tr>
+<td>Známé zranitelnosti</td>
+<td>CI <code>supply-chain.yml</code> při každém push a každé pondělí: <code>pip-audit</code> nad zámky image i všemi <code>uv.lock</code>, <code>dotnet list package --vulnerable</code>, Trivy nad image z compose. Dependabot s cooldownem 7 dní pro uv, pip, NuGet, Docker, compose a GitHub Actions.</td>
+<td>nález v Python/NuGet → CI červené; Trivy jen report, rozhoduje vlastník</td>
+<td><strong>zavedeno</strong></td>
+</tr>
+<tr>
+<td>Výjimky</td>
+<td>Nález, který se netýká použité části balíčku, jde přijmout jen záznamem v <code>supply-chain-exceptions.toml</code>: adresář, balíček, verze, id, důvod, oprava, vlastník, expirace. CI ho předá jako <code>--ignore-vuln</code>.</td>
+<td>vypršelá výjimka nebo jiná verze balíčku → test V37 selže</td>
+<td><strong>zavedeno</strong>, 1 výjimka (<code>litellm</code>, viz níže)</td>
+</tr>
+<tr>
+<td>CI samo</td>
+<td>Akce připnuté SHA commitu, Trivy digestem, <code>permissions: contents: read</code>.</td>
+<td>—</td>
+<td><strong>zavedeno</strong></td>
+</tr>
+<tr>
+<td>Aktualizace</td>
+<td>Jako každá změna (kap. 6.5): commit zámku nebo digestu, audit, test gate a test supply chain.</td>
+<td>neprošlý test → nenasadí se</td>
+<td>pravidlo</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Proč to pro tenhle systém stačí:</strong> nejhorší cestu (kód v procesu gate)
+zavírají zamčené hashe a minimum závislostí v tom procesu. Model s
+backdoorem je jen další forma T3. Gate je deterministický kód, takže ani
+zlomyslný model nedostane víc než data klienta, za kterého se ptá.</p>
+<p><strong>Přijatá výjimka <code>litellm</code> 1.83.0 v agentovi Pydantic AI</strong> (do 2027-01-16):
+14 nálezů, všechny v LiteLLM Proxy serveru (endpointy <code>/prompts/test</code>,
+<code>/mcp-rest</code>, autentizace proxy). Agent proxy nespouští, <code>litellm</code> se načte
+jen přes HW1 kvůli <code>build_system_prompt</code>. Novější <code>litellm</code> chce <code>openai&lt;3</code>,
+čímž stáhne <code>pydantic-ai-slim</code> zpět na verzi se zranitelnostmi v kódu, který
+agent skutečně volá. Oprava: oddělit <code>build_system_prompt</code> v HW1 od <code>llm</code>.</p>
+<p><strong>Otevřené: n8n a LangFlow.</strong> Trivy (2026-10-16) hlásí v n8n 2.38.3 32
+kritických nálezů s opravou (OpenSSH, <code>vm2</code>, <code>handlebars</code>, <code>shell-quote</code>),
+v LangFlow 1.12.0 3 kritické (<code>PyJWT</code>, <code>chromadb</code> bez opravy). Novější n8n
+(2.43.7, 2.44.3) vyšlo v den skenu, tedy uvnitř vlastní karantény. Před
+spuštěním rozšíření: n8n na verzi starší 7 dní bez kritických nálezů,
+znovu ověřit workflow (V14). LangFlow v rozšíření klientům nic
+nevystavuje, jen vlastníkovi na loopbacku.</p>
+<p><strong>Zbytkové riziko:</strong>
+- Lockfile zamkne i verzi, která už podvržená byla. Hash dokazuje
+  totožnost, ne nevinnost. Snižuje to karanténa 7 dní a audit.
+- Zero-day v zamčené verzi, dokud se neobjeví v databázi zranitelností.
+- Digest modelu ověří, že jde o stejné váhy, ne že jsou čisté. Dopad
+  omezuje M1.
+- Vlastní kód nástrojů (<code>HW1/</code>) a gate (<code>security/</code>) chrání jen git
+  a review. Podepsané commity se nevyžadují, autor je jeden.</p>
+<h2>4.5 Pokrytí hrozeb</h2>
 <div class="tbl"><table>
 <thead>
 <tr>
@@ -984,6 +1204,12 @@ deterministický kód před SQL dotazem, model ho nemůže přesvědčit.</p>
 <td>M7</td>
 <td>—</td>
 <td>zálohy</td>
+</tr>
+<tr>
+<td>T9</td>
+<td>M8</td>
+<td>M1 (omezí dopad modelu)</td>
+<td>podvržená verze před karanténou, zero-day</td>
 </tr>
 </tbody>
 </table></div></section><section id="k05" class="tab" hidden><h1>5. Plán ověření</h1>
@@ -1205,6 +1431,48 @@ výsledku), ne jen návratový kód. Nástroje jsou read-only, takže zakázaný
 <td>běh dnes</td>
 <td>starý smazán</td>
 </tr>
+<tr>
+<td>V26</td>
+<td>M8</td>
+<td>instalace ze zámku, kde jsou u <code>mcp</code> změněné <strong>všechny</strong> hashe (pip bere libovolný z uvedených)</td>
+<td>nezměněný zámek</td>
+<td><strong>získáno</strong>: <code>THESE PACKAGES DO NOT MATCH THE HASHES</code>, exit 1 / všechny tři image se postaví a Python servery vrátí <code>/health</code> 200</td>
+</tr>
+<tr>
+<td>V27</td>
+<td>M8</td>
+<td><code>mcp==2.1.1</code> v závislostech</td>
+<td>aktuální zámky</td>
+<td><strong>získáno</strong>: <code>pip-audit</code> hlásí CVE-2026-59951 / po opravě všech 7 zámků bez nálezu (1 přijatá výjimka)</td>
+</tr>
+<tr>
+<td>V28</td>
+<td>M8</td>
+<td><code>OLLAMA_MODEL_DIGEST</code> jiného modelu; chybí digest; server nedostupný</td>
+<td>správný digest</td>
+<td><strong>získáno</strong>: <code>STOP</code>, exit 1 ve všech třech / <code>OK</code>, exit 0 (proti Sparku)</td>
+</tr>
+<tr>
+<td>V29</td>
+<td>M8</td>
+<td><code>restore --locked-mode</code> po změně verze v <code>.csproj</code></td>
+<td>beze změny</td>
+<td><strong>získáno</strong>: <code>NU1004 … lock file is inconsistent</code> / restore jen z nuget.org, 6/6 testů .NET</td>
+</tr>
+<tr>
+<td>V30</td>
+<td>M8</td>
+<td>sken image n8n a LangFlow</td>
+<td>—</td>
+<td><strong>získáno, nesplněno</strong>: n8n 32 kritických, LangFlow 3 (kap. 4.4)</td>
+</tr>
+<tr>
+<td>V31–V37</td>
+<td>M8</td>
+<td>automatický test <code>tests/test_supply_chain.py</code>: každý <code>FROM</code> a <code>image:</code> s digestem, každý řádek zámku image s hashem a <code>--require-hashes</code> v Dockerfile, <code>mcp</code> všude ≥ opravené verze, NuGet lockfile a jen nuget.org, n8n bez community uzlů, výjimky platné a navázané na verzi</td>
+<td>—</td>
+<td><strong>získáno</strong>: 10/10, v CI při každém push</td>
+</tr>
 </tbody>
 </table></div>
 <h2>5.3 Evidence: plánovaná vs. získaná</h2>
@@ -1221,12 +1489,20 @@ výsledku), ne jen návratový kód. Nástroje jsou read-only, takže zakázaný
 <td><strong>získáno v kap. 7</strong>: výstup testu V0–V13 a V21–V25 a běh s vypnutým gate</td>
 </tr>
 <tr>
+<td>M8 (V26–V29, V31–V37)</td>
+<td><strong>získáno 2026-10-16</strong>, viz tabulka výše; test supply chain v CI. Výchozí audit: <code>pip-audit</code> nad <code>security/uv.lock</code> (84 balíčků, s hashi) bez nálezu, <code>mcp</code> 2.3.0. Nad <code>HW3/mcp/requirements.txt</code> nález CVE-2026-59951 v <code>mcp==2.1.1</code>; gate má proto spodní hranici <code>mcp&gt;=2.2.0</code>. <code>dotnet list package --vulnerable --include-transitive</code> nad oběma .NET projekty bez nálezu. Sken image (V30) získán, nesplněno</td>
+</tr>
+<tr>
 <td>M2–M7</td>
 <td>plánovaná, ověří se při nasazení na Proxmox podle V14–V20</td>
 </tr>
+<tr>
+<td>M8, zbytek</td>
+<td>napojení <code>check_model.py</code> do startu klientů a upgrade n8n, ověří se při nasazení</td>
+</tr>
 </tbody>
 </table></div>
-<p>Regresní pravidlo: test M1 musí projít před každou změnou nástrojů, politiky
+<p>Regresní pravidlo: test M1 a test supply chain musí projít před každou změnou nástrojů, politiky
 nebo MCP serveru. Neprošlý test blokuje nasazení.</p></section><section id="k06" class="tab" hidden><h1>6. Provoz a governance</h1>
 <h2>6.1 Role a vlastnictví</h2>
 <p>Systém provozuje jeden člověk, dodavatel. Role jsou proto sloučené, ale
@@ -1258,7 +1534,10 @@ rozhodnutí jsou pojmenovaná zvlášť.</p>
 </tbody>
 </table></div>
 <p><strong>Přijatá rizika</strong> (vlastník, 2026-10-14): T7 s limitem zpráv; zbytkové T3
-uvnitř dat téhož klienta; důvěra v n8n jako prostředníka (kap. 4.2).</p>
+uvnitř dat téhož klienta; důvěra v n8n jako prostředníka (kap. 4.2).
+Od 2026-10-16 i zbytek T9: podvržená verze, která projde karanténou
+7 dní, a zero-day v zamčené verzi; výjimka <code>litellm</code> v agentovi Pydantic AI
+do 2027-01-16 (<code>supply-chain-exceptions.toml</code>, kap. 4.4).</p>
 <h2>6.2 Logy a jejich ochrana</h2>
 <div class="tbl"><table>
 <thead>
@@ -1347,6 +1626,16 @@ nevydá výsledek (V24). Vypnout ho tedy nejde potichu.</p>
 <td>střední, provozní (signál je 503 v access logu uvicorn, audit sám zapsat nejde)</td>
 </tr>
 <tr>
+<td><code>pip-audit</code> nebo Dependabot nález v <code>mcp</code>, <code>uvicorn</code>, n8n či LangFlow</td>
+<td>zranitelná závislost v cestě k datům (T9)</td>
+<td>vysoká u RCE a obejití autentizace, jinak střední</td>
+</tr>
+<tr>
+<td>digest modelu nebo image nesedí</td>
+<td>podvržení v registru nebo nečekaný update (T9)</td>
+<td>vysoká</td>
+</tr>
+<tr>
 <td><code>allow</code> od klienta mimo obvyklou dobu nebo v objemu &gt; 10× průměru</td>
 <td>převzatý účet klienta</td>
 <td>střední</td>
@@ -1385,6 +1674,11 @@ nevydá výsledek (V24). Vypnout ho tedy nejde potichu.</p>
 <td>obnova workflow z gitu, nové heslo, nový bot token přes BotFather</td>
 </tr>
 <tr>
+<td>Kompromitovaná závislost</td>
+<td>zastavit dotčenou službu; vrátit lockfile nebo digest na poslední známou verzi z gitu</td>
+<td>rebuild, rotace tajemství, ke kterým služba měla přístup (bot token, tokeny MCP); z auditu zjistit, co služba volala</td>
+</tr>
+<tr>
 <td>Únik dat jinému klientovi</td>
 <td>zastavit bot; z auditu zjistit, kdo co dostal</td>
 <td>oprava, regresní test pro daný případ, informovat dotčeného klienta</td>
@@ -1403,7 +1697,17 @@ nevrátil.</p>
   dává přístup ke všem klientům. Jen pro vlastní účet vlastníka.</li>
 <li>Nový nástroj je pro klienty zakázaný, dokud se výslovně nepřidá do
   <code>CLIENT_TOOLS</code> s testem.</li>
-<li>Změna modelu nebo <code>OLLAMA_BASE_URL</code> se ověří proti allowlistu (M5).</li>
+<li>Změna modelu nebo <code>OLLAMA_BASE_URL</code> se ověří proti allowlistu (M5).
+  Nový model = nový digest v konfiguraci, commitem.</li>
+<li>Aktualizace závislostí jen změnou lockfile nebo digestu v gitu: verze
+  starší 7 dní, <code>pip-audit</code> bez nálezu, test gate prošel (M8). Žádný
+  <code>latest</code>, žádný build bez lockfile.</li>
+<li>Bezpečnostní oprava může být mladší než karanténa (n8n 2026-10-16).
+  Vlastník pak rozhoduje mezi známou zranitelností a nevyzkoušenou verzí;
+  rozhodnutí patří do commitu s důvodem. Výchozí volba: počkat 7 dní,
+  pokud zranitelná služba není dosažitelná zvenku.</li>
+<li>Přijetí nálezu jen záznamem v <code>supply-chain-exceptions.toml</code> s expirací.
+  Výjimka se po aktualizaci balíčku maže (hlídá test V37).</li>
 </ul>
 <h2>6.6 Regulace</h2>
 <div class="tbl"><table>
@@ -1453,8 +1757,18 @@ nevrátil.</p>
 <td>při nasazení na Proxmox</td>
 </tr>
 <tr>
+<td>Supply chain V26–V29, V31–V37</td>
+<td>2026-10-16, vše prošlo; test V31–V37 10/10</td>
+<td>test při každém push (CI), audit každé pondělí</td>
+</tr>
+<tr>
+<td>Sken image V30</td>
+<td>2026-10-16, n8n 32 a LangFlow 3 kritické</td>
+<td>každé pondělí (CI); před nasazením musí být n8n bez kritických</td>
+</tr>
+<tr>
 <td>Revize threat modelu</td>
-<td>2026-10-15 (skupinové chaty, vlastník přes Telegram, povinný audit)</td>
+<td>2026-10-16 (supply chain: T9, M8)</td>
 <td>při přidání nového zdroje dat, nového kanálu nebo při publikování mimo domácí síť</td>
 </tr>
 </tbody>
@@ -1756,7 +2070,7 @@ text zprávy. Test proto:</p>
 <li><strong>Model:</strong> chování modelu se netestuje vůbec. Injection (T3) uvnitř dat
   téhož klienta zůstává.</li>
 <li><strong>Kompromitace n8n nebo tokenu <code>owner</code>:</strong> gate jim věří.</li>
-<li><strong>Ostatní mitigace M2–M7:</strong> jen plán ověření V14–V20.</li>
+<li><strong>Ostatní mitigace M2–M7:</strong> jen plán ověření V14–V20. M8 je zavedená v repu a ověřená (V26–V37, kap. 4.4 a 5.3), otevřený zůstává upgrade n8n.</li>
 <li><strong>Souběh s původním serverem:</strong> gate chrání jen tehdy, když server z HW3
   bez gate neběží (M3, ověří V16).</li>
 <li><strong>Tokeny agentů a LangFlow:</strong> dnes se k MCP připojují bez tokenu. Po

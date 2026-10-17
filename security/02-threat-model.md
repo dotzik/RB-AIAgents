@@ -16,6 +16,7 @@ U každé hrozby: **kdo ovládá vstup → kterou hranici překračuje → dopad
 | **T6** | Převzetí administrace a tajemství | útočník v LAN, malware | B3 | převzetí bota |
 | **T7** | Zahlcení bota | kdokoli s Telegramem | B1 | nedostupnost |
 | **T8** | Konverzace bez retence | — (provozní slabina) | — | únik historie, GDPR |
+| **T9** | Kompromitovaná nebo zranitelná závislost | autor balíčku, image nebo modelu; převzatý účet v registru | B6 | kód uvnitř gate, převzetí bota, model s backdoorem |
 
 ## 2.2 Cesty útoku
 
@@ -72,10 +73,38 @@ U každé hrozby: **kdo ovládá vstup → kterou hranici překračuje → dopad
   s daty klientů neomezeně.
 - *Dopad:* únik při kompromitaci, porušení minimalizace (GDPR čl. 5).
 
+**T9 · Kompromitovaná nebo zranitelná závislost (supply chain)**
+- *Cesta A, balíček:* nová verze tranzitivní závislosti `mcp` nebo
+  `uvicorn` s podvrženým kódem. `pip install` v image ji bez lockfile
+  a hashů stáhne při příštím buildu. Kód běží **v procesu MCP serveru,
+  tedy uvnitř gate**, vidí databázi i politiku a gate obejde.
+- *Cesta B, známá zranitelnost:* připnutá verze zastará. Reálný nález
+  z 2026-10-16: image MCP serveru z HW3 má `mcp==2.1.1` s CVE-2026-59951
+  (GHSA-84m7-p3x7-pcfv). Stateful Streamable HTTP server nikdy neuvolní
+  session, takže krátkými požadavky jde neomezeně zvětšovat paměť až do
+  pádu. Opraveno ve 2.2.0. Stejný audit našel zranitelné `starlette` v API z HW2, `pyjwt`,
+  `urllib3`, `multidict`, `pydantic-ai-slim` a `litellm` v zámcích agentů
+  a Trivy 32 kritických nálezů v image n8n 2.38.3 (mimo jiné únik ze
+  sandboxu `vm2`) a 3 v LangFlow 1.12.0 (kap. 5.3).
+- *Cesta C, image:* `python:3.12-slim` nebo `dotnet/aspnet:10.0` je
+  pohyblivý tag, při rebuildu přijde jiný obsah. n8n a LangFlow drží bot
+  token a hesla, jejich image je nejcitlivější. Oba produkty už měly
+  kritické RCE bez přihlášení (např. LangFlow CVE-2025-3248).
+- *Cesta C2, záměna zdroje:* NuGet restore bere všechny feedy z globální
+  konfigurace stroje. Balíček stejného jména ve feedu, který se projektu
+  netýká, může vyhrát nad nuget.org (dependency confusion).
+- *Cesta D, model:* `ollama pull qwen2.5:32b` stáhne, co je pod tagem právě
+  teď. Podvržené nebo přetrénované váhy mohou na spouštěč v textu volat
+  nástroje s cizím projektem nebo zkreslovat odpovědi.
+- *Dopad:* u A a C plná kompromitace (všechna data, bot token). U B
+  nedostupnost. U D stejný únik jako T3, ale trvalý a bez stopy v datech.
+  OWASP LLM03 Supply Chain, LLM04 Data and Model Poisoning.
+
 ## 2.3 Vědomě vyřazeno
 
 | Hrozba | Proč neplatí |
 |---|---|
 | Zápisové akce | žádné nejsou, nástroje jsou read-only, DB `:ro` |
 | SQL injection | parametrizované dotazy, `dimension` z whitelistu (`tools.py:201-208`, kontrola `:219`) |
+| Kompromitace samotného registru (PyPI, Docker Hub, Ollama) | mimo vliv provozovatele; řeší se tím, co se z registru přijme (M8), ne registrem |
 | Chybný výpočet faktury modelem | částky počítá deterministický `compute_invoice`; n8n uzel „Ověř zdroj“ zahodí číselnou odpověď, pokud neběžel nástroj |

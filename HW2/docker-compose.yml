@@ -43,13 +43,15 @@ services:
   # n8n — integrační nástroj, kterému přibyla AI.
   # ---------------------------------------------------------------------------
   n8n:
-    image: n8nio/n8n:2.38.3
+    image: n8nio/n8n:2.38.3@sha256:4b76b9c5a69dc1c0f26bedd21b4e281ac2c84bd88d33857487b9e63dd0a42e87
     container_name: hw2-n8n
     restart: unless-stopped
     environment:
       GENERIC_TIMEZONE: Europe/Prague
       TZ: Europe/Prague
       N8N_DIAGNOSTICS_ENABLED: "false"
+      # Jen vestavěné uzly, community balíčky nejdou nainstalovat (supply chain, M8).
+      N8N_COMMUNITY_PACKAGES_ENABLED: "false"
       N8N_RUNNERS_ENABLED: "true"
       # Bez tohohle vrátí n8n HTTP 431 (bílá stránka), jakmile prohlížeč pošle
       # velkou Cookie hlavičku — na stroji s dalšími službami na `localhost`
@@ -84,7 +86,7 @@ services:
   # zato je blíž tomu, co je v HW1 napsané v Pythonu.
   # ---------------------------------------------------------------------------
   langflow:
-    image: langflowai/langflow:1.12.0
+    image: langflowai/langflow:1.12.0@sha256:65796601f3fc7a39c674671ceaca3bb3a69bd6581d08e2582f15fca2ad4ba6d0
     container_name: hw2-langflow
     restart: unless-stopped
     environment:

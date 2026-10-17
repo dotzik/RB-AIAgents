@@ -1,0 +1,29 @@
+# Návrhy aktualizací jako PR; každý PR projde workflow supply-chain.
+# Cooldown 7 dní = stejná karanténa jako `--exclude-newer "7 days"` (M8).
+# Bezpečnostní aktualizace cooldown nečekají.
+version: 2
+updates:
+  - package-ecosystem: uv
+    directories: ["/HW1", "/HW3/mcp", "/HW3/agents/python", "/HW3/agents/langgraph", "/security"]
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
+  - package-ecosystem: pip
+    directories: ["/HW3/mcp", "/HW2/api"]
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
+  - package-ecosystem: nuget
+    directories: ["/HW3/mcp-dotnet", "/HW3/agents/dotnet"]
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
+  - package-ecosystem: docker
+    directories: ["/HW3/mcp", "/HW2/api", "/HW3/mcp-dotnet"]
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
+  - package-ecosystem: docker-compose
+    directories: ["/HW2"]
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }

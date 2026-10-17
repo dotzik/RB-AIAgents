@@ -5,6 +5,8 @@ description = "Agent nad MCP serverem z HW3, postavený na Pydantic AI"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic-ai-slim[mcp,openai]>=1.0.0",
+    # Přímo kvůli CVE-2026-59951 (security/04-mitigace.md, M8); pydantic-ai sám spodní hranici nemá.
+    "mcp>=2.2.0",
     "python-dotenv>=1.0.1",
     "timeagent",
 ]
@@ -21,3 +23,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mcpagent"]
+
+[tool.uv]
+# Karanténa nových verzí 7 dní (supply chain, security/04-mitigace.md, M8).
+exclude-newer = "7 days"

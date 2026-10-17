@@ -36,3 +36,7 @@ extend-select = ["UP", "SIM", "RUF", "DTZ", "B", "C4", "I"]
 # `date.today()` i naivní `strptime` jsou tu záměr, ne opomenutí.
 # Projekt je psaný česky — pomlčky a nezlomitelné mezery jsou záměr typografie.
 ignore = ["DTZ007", "DTZ011", "RUF001", "RUF002", "RUF003"]
+
+[tool.uv]
+# Karanténa nových verzí 7 dní (supply chain, security/04-mitigace.md, M8).
+exclude-newer = "7 days"

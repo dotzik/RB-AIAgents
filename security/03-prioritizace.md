@@ -12,9 +12,10 @@ lokální stav. Škála: nízká, střední, vysoká.
 | 3 | **T4** | střední (dnes nízká) | vysoký | Dnes je vše jen na loopbacku notebooku. Na Proxmoxu ale stačí jedna chyba v publikování portu nebo kompromitovaný kontejner. Rozhoduje to, **kde** se kontrola vynucuje: kontrola jen v n8n by T4 nechala otevřené. |
 | 4 | **T3** | střední | střední | Popisy píše dodavatel sám, ale export je soubor mimo kontrolu systému. Po vyřešení T2 v nástrojích je dopad omezený na data téhož klienta. Injection pak nemá kam eskalovat. |
 | 5 | **T5** | nízká | vysoký | Odposlech vyžaduje útočníka v domácí LAN, únik k cizímu poskytovateli vědomou změnu konfigurace. Dopad je ale nevratný. Řeší se šifrovaným spojením a kontrolou adresy modelu při startu, ne gate. |
-| 6 | **T6** | nízká (dnes), střední (Proxmox) | vysoký | Platí hlavně po přesunu mimo notebook. Než se rozšíření spustí, jde o povinné kroky hardeningu. |
-| 7 | **T7** | střední | nízký | Po vyřešení T1 píšou botu jen známí klienti. Lokální model nestojí nic navíc. Akceptovatelné s jednoduchým limitem. |
-| 8 | **T8** | nízká | střední | Řeší se nastavením retence, levná oprava. |
+| 6 | **T9** | nízká (podvržený kód), vysoká (známá zranitelnost) | vysoký | Cílený útok na malý projekt je málo pravděpodobný, zastaralá verze je ale skoro jistota: první audit našel CVE v `mcp`. Podvržený kód v procesu MCP serveru stojí za gate, M1 ho nezastaví. U modelu je to naopak: backdoor ve vahách gate omezí na data téhož klienta. Oprava je levná (lockfile, digesty, audit), proto před T6. |
+| 7 | **T6** | nízká (dnes), střední (Proxmox) | vysoký | Platí hlavně po přesunu mimo notebook. Než se rozšíření spustí, jde o povinné kroky hardeningu. |
+| 8 | **T7** | střední | nízký | Po vyřešení T1 píšou botu jen známí klienti. Lokální model nestojí nic navíc. Akceptovatelné s jednoduchým limitem. |
+| 9 | **T8** | nízká | střední | Řeší se nastavením retence, levná oprava. |
 
 **Co řešit první:** T2 a T1 jednou kontrolou identity a autorizace. Kontrolu
 je nutné vynutit v MCP serveru, ne v n8n ani v promptu, aby současně
@@ -30,5 +31,7 @@ počítají nástroje.
 - Klienti dostanou přístup i do LangFlow nebo k MCP napřímo. T4 se stane prioritou 1.
 - Export bude obsahovat jména zaměstnanců klienta nebo jiné osobní údaje.
   Dopad T5 a T8 se zvýší kvůli GDPR.
+- MCP endpoint bude dosažitelný z nedůvěryhodné sítě. Známé DoS
+  zranitelnosti (T9, cesta B) se stanou prioritou 3.
 - Na Proxmoxu bude služba publikovaná mimo domácí síť. T6 se stane
   prioritou 2.

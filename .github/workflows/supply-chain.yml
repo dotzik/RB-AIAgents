@@ -1,0 +1,79 @@
+# Supply chain (security/04-mitigace.md, M8): zámky a známé zranitelnosti.
+# Akce i image jsou připnuté SHA / digestem, stejně jako zbytek repa.
+name: supply-chain
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 5 * * 1"   # každé pondělí
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  locks:
+    name: Zámky a digesty (V31–V37)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - run: uv run --frozen pytest -v tests/test_supply_chain.py
+        working-directory: security
+
+  python-audit:
+    name: pip-audit (V27)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Zámky image (requirements.txt s hashi)
+        run: |
+          for r in HW3/mcp/requirements.txt HW2/api/requirements.txt; do
+            echo "== $r"; uvx pip-audit --require-hashes --disable-pip -r "$r"
+          done
+      - name: uv.lock projektů
+        # Přijaté nálezy jen podle security/supply-chain-exceptions.toml (adresář + id).
+        run: |
+          for d in security HW1 HW3/mcp HW3/agents/python HW3/agents/langgraph; do
+            echo "== $d"
+            ignore=$(python3 -c "import sys,tomllib; e=tomllib.load(open('security/supply-chain-exceptions.toml','rb')).get('exception',[]); print(' '.join('--ignore-vuln '+i for x in e if x['directory']==sys.argv[1] for i in x['ids']))" "$d")
+            (cd "$d" && uv export --frozen --no-emit-project --no-emit-local --format requirements-txt -o /tmp/req.txt)
+            uvx pip-audit --require-hashes --disable-pip $ignore -r /tmp/req.txt
+          done
+
+  dotnet-audit:
+    name: NuGet audit (V29)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: "10.0.x"
+      - run: |
+          fail=0
+          for p in HW3/mcp-dotnet/TimeAgent.Mcp.Tests HW3/agents/dotnet/McpAgent; do
+            dotnet restore "$p" --locked-mode
+            out=$(dotnet list "$p" package --vulnerable --include-transitive)
+            echo "$out"
+            echo "$out" | grep -q "has the following vulnerable packages" && fail=1
+          done
+          exit $fail
+
+  images:
+    name: Trivy n8n a LangFlow (V30, report)
+    runs-on: ubuntu-latest
+    # Opravu dodává upstream, ne tohle repo. Nález nezastaví build, rozhodnutí
+    # o nasazení dělá vlastník podle reportu (security/06-provoz-governance.md).
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: |
+          for img in $(grep -oE 'image: \S+@sha256:[0-9a-f]{64}' HW2/docker-compose.yml | cut -d' ' -f2); do
+            echo "## $img" >> "$GITHUB_STEP_SUMMARY"
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+              aquasec/trivy:0.76.0@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222 \
+              image --quiet --scanners vuln --severity CRITICAL --format table "$img" | tee -a "$GITHUB_STEP_SUMMARY"
+          done

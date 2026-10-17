@@ -59,13 +59,21 @@ výsledku), ne jen návratový kód. Nástroje jsou read-only, takže zakázaný
 | V18 | M5 | `OLLAMA_BASE_URL` na veřejnou adresu | adresa v docker síti | klient nenastartuje / nastartuje |
 | V19 | M6 | CSV s popisem 5 000 znaků a s instrukcí | běžný export | popis zkrácen; přes M1 se instrukce neprojeví mimo data klienta |
 | V20 | M7 | běh starší 14 dní | běh dnes | starý smazán |
+| V26 | M8 | instalace ze zámku, kde jsou u `mcp` změněné **všechny** hashe (pip bere libovolný z uvedených) | nezměněný zámek | **získáno**: `THESE PACKAGES DO NOT MATCH THE HASHES`, exit 1 / všechny tři image se postaví a Python servery vrátí `/health` 200 |
+| V27 | M8 | `mcp==2.1.1` v závislostech | aktuální zámky | **získáno**: `pip-audit` hlásí CVE-2026-59951 / po opravě všech 7 zámků bez nálezu (1 přijatá výjimka) |
+| V28 | M8 | `OLLAMA_MODEL_DIGEST` jiného modelu; chybí digest; server nedostupný | správný digest | **získáno**: `STOP`, exit 1 ve všech třech / `OK`, exit 0 (proti Sparku) |
+| V29 | M8 | `restore --locked-mode` po změně verze v `.csproj` | beze změny | **získáno**: `NU1004 … lock file is inconsistent` / restore jen z nuget.org, 6/6 testů .NET |
+| V30 | M8 | sken image n8n a LangFlow | — | **získáno, nesplněno**: n8n 32 kritických, LangFlow 3 (kap. 4.4) |
+| V31–V37 | M8 | automatický test `tests/test_supply_chain.py`: každý `FROM` a `image:` s digestem, každý řádek zámku image s hashem a `--require-hashes` v Dockerfile, `mcp` všude ≥ opravené verze, NuGet lockfile a jen nuget.org, n8n bez community uzlů, výjimky platné a navázané na verzi | — | **získáno**: 10/10, v CI při každém push |
 
 ## 5.3 Evidence: plánovaná vs. získaná
 
 | Opatření | Stav evidence |
 |---|---|
 | M1 | **získáno v kap. 7**: výstup testu V0–V13 a V21–V25 a běh s vypnutým gate |
+| M8 (V26–V29, V31–V37) | **získáno 2026-10-16**, viz tabulka výše; test supply chain v CI. Výchozí audit: `pip-audit` nad `security/uv.lock` (84 balíčků, s hashi) bez nálezu, `mcp` 2.3.0. Nad `HW3/mcp/requirements.txt` nález CVE-2026-59951 v `mcp==2.1.1`; gate má proto spodní hranici `mcp>=2.2.0`. `dotnet list package --vulnerable --include-transitive` nad oběma .NET projekty bez nálezu. Sken image (V30) získán, nesplněno |
 | M2–M7 | plánovaná, ověří se při nasazení na Proxmox podle V14–V20 |
+| M8, zbytek | napojení `check_model.py` do startu klientů a upgrade n8n, ověří se při nasazení |
 
-Regresní pravidlo: test M1 musí projít před každou změnou nástrojů, politiky
+Regresní pravidlo: test M1 a test supply chain musí projít před každou změnou nástrojů, politiky
 nebo MCP serveru. Neprošlý test blokuje nasazení.

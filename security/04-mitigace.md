@@ -13,6 +13,7 @@
 | M5 | Chráněná cesta k modelu | T5 | start každého klienta, síť | vlastník systému |
 | M6 | Import jako nedůvěryhodný vstup | T3 | importer CSV | vlastník systému |
 | M7 | Retence konverzací | T8 | n8n | vlastník systému |
+| M8 | Řízené přebírání závislostí (supply chain) | T9 | build image, start služeb, git | vlastník systému |
 
 Vlastník je u všech stejný: systém provozuje jeden člověk (dodavatel).
 Rozdělení rolí v kapitole 6.
@@ -101,8 +102,60 @@ Klient přes `client-proxy`:
 | **M5** | Každý klient při startu ověří `OLLAMA_BASE_URL` proti allowlistu (loopback, docker síť, privátní rozsahy). Jinak odmítne běžet. Ollama na stejném stroji nebo přes WireGuard, ne plain HTTP přes LAN. | start selže s hláškou, data neodejdou | vědomé přepsání allowlistu vlastníkem |
 | **M6** | Importer bere jen očekávané sloupce, popis zkrátí na 200 znaků, zahodí sloupec s osobou (jména). V promptu jsou výsledky nástrojů označené jako data, ne pokyny. | řádek mimo schéma se přeskočí a zaloguje | Injection v popisu může zůstat. Rozhoduje M1, prompt je jen pomocná vrstva. |
 | **M7** | n8n `EXECUTIONS_DATA_PRUNE=true`, maximální stáří 14 dní. Paměť konverzace jen posledních 10 zpráv. | — | data v zálohách disku |
+| **M8** | Viz 4.4. | build nebo start selže, nic se nespustí | podvržený kód už v zamčené verzi; zero-day |
 
-## 4.4 Pokrytí hrozeb
+## 4.4 M8 · Supply chain
+
+**Řetězec:** T9 → hranice B6 → co se z registru přijme a jak se to ověří →
+V26–V37 (kap. 5) → zbytkové riziko níže.
+
+Princip: do buildu i běhu se dostane jen to, co je **zamčené hashem nebo
+digestem v gitu**. Nová verze přijde jen vědomou změnou, která projde
+auditem a testem gate.
+
+| Vrstva | Opatření | Při chybě | Stav |
+|---|---|---|---|
+| Python v image | `requirements.in` → `uv pip compile --generate-hashes` → `pip install --require-hashes --no-deps`. Server s gate má v procesu jen `mcp` a `uvicorn`. Spodní hranice `mcp>=2.2.0` (CVE-2026-59951). | nesedí hash nebo balíček mimo zámek → build selže | **zavedeno** (`HW3/mcp`, `HW2/api`) |
+| Python projekty | `uv.lock` s hashi, `[tool.uv] exclude-newer = "7 days"` v každém `pyproject.toml`. Karanténa je v konfiguraci, ne na příkazové řádce: `--exclude-newer` z CLI se uloží do zámku a další `uv run` bez něj zámek potichu přeřeší. | novější verze se nevybere | **zavedeno** |
+| Base image, n8n, LangFlow | Tag + digest (`python:3.12-slim@sha256:…`, `n8nio/n8n:2.38.3@sha256:…`). Aktualizace = nový digest v commitu. | jiný obsah pod tagem se nestáhne | **zavedeno** |
+| n8n | Jen vestavěné uzly, `N8N_COMMUNITY_PACKAGES_ENABLED=false`. | community node nejde nainstalovat | **zavedeno** |
+| NuGet | `nuget.config` vedle projektů: `<clear/>`, jen nuget.org, `packageSourceMapping` `*`. `RestorePackagesWithLockFile`, `restore --locked-mode`, v image `RestoreLockedMode=true`. | cizí zdroj se nepoužije; změna grafu → restore selže | **zavedeno** |
+| Model | `OLLAMA_MODEL_DIGEST` v konfiguraci, `security/check_model.py` porovná s `/api/tags`. | jiný digest, chybějící digest nebo nedostupný server → kód 1, klient nemá startovat | **skript hotový**, napojení do startu pěti klientů při nasazení |
+| Známé zranitelnosti | CI `supply-chain.yml` při každém push a každé pondělí: `pip-audit` nad zámky image i všemi `uv.lock`, `dotnet list package --vulnerable`, Trivy nad image z compose. Dependabot s cooldownem 7 dní pro uv, pip, NuGet, Docker, compose a GitHub Actions. | nález v Python/NuGet → CI červené; Trivy jen report, rozhoduje vlastník | **zavedeno** |
+| Výjimky | Nález, který se netýká použité části balíčku, jde přijmout jen záznamem v `supply-chain-exceptions.toml`: adresář, balíček, verze, id, důvod, oprava, vlastník, expirace. CI ho předá jako `--ignore-vuln`. | vypršelá výjimka nebo jiná verze balíčku → test V37 selže | **zavedeno**, 1 výjimka (`litellm`, viz níže) |
+| CI samo | Akce připnuté SHA commitu, Trivy digestem, `permissions: contents: read`. | — | **zavedeno** |
+| Aktualizace | Jako každá změna (kap. 6.5): commit zámku nebo digestu, audit, test gate a test supply chain. | neprošlý test → nenasadí se | pravidlo |
+
+**Proč to pro tenhle systém stačí:** nejhorší cestu (kód v procesu gate)
+zavírají zamčené hashe a minimum závislostí v tom procesu. Model s
+backdoorem je jen další forma T3. Gate je deterministický kód, takže ani
+zlomyslný model nedostane víc než data klienta, za kterého se ptá.
+
+**Přijatá výjimka `litellm` 1.83.0 v agentovi Pydantic AI** (do 2027-01-16):
+14 nálezů, všechny v LiteLLM Proxy serveru (endpointy `/prompts/test`,
+`/mcp-rest`, autentizace proxy). Agent proxy nespouští, `litellm` se načte
+jen přes HW1 kvůli `build_system_prompt`. Novější `litellm` chce `openai<3`,
+čímž stáhne `pydantic-ai-slim` zpět na verzi se zranitelnostmi v kódu, který
+agent skutečně volá. Oprava: oddělit `build_system_prompt` v HW1 od `llm`.
+
+**Otevřené: n8n a LangFlow.** Trivy (2026-10-16) hlásí v n8n 2.38.3 32
+kritických nálezů s opravou (OpenSSH, `vm2`, `handlebars`, `shell-quote`),
+v LangFlow 1.12.0 3 kritické (`PyJWT`, `chromadb` bez opravy). Novější n8n
+(2.43.7, 2.44.3) vyšlo v den skenu, tedy uvnitř vlastní karantény. Před
+spuštěním rozšíření: n8n na verzi starší 7 dní bez kritických nálezů,
+znovu ověřit workflow (V14). LangFlow v rozšíření klientům nic
+nevystavuje, jen vlastníkovi na loopbacku.
+
+**Zbytkové riziko:**
+- Lockfile zamkne i verzi, která už podvržená byla. Hash dokazuje
+  totožnost, ne nevinnost. Snižuje to karanténa 7 dní a audit.
+- Zero-day v zamčené verzi, dokud se neobjeví v databázi zranitelností.
+- Digest modelu ověří, že jde o stejné váhy, ne že jsou čisté. Dopad
+  omezuje M1.
+- Vlastní kód nástrojů (`HW1/`) a gate (`security/`) chrání jen git
+  a review. Podepsané commity se nevyžadují, autor je jeden.
+
+## 4.5 Pokrytí hrozeb
 
 | Hrozba | Hlavní opatření | Doplňkové | Zbytek po opatřeních |
 |---|---|---|---|
@@ -114,3 +167,4 @@ Klient přes `client-proxy`:
 | T6 | M4 | M3 | malware na hostiteli |
 | T7 | M2 | — | zahlcení z povoleného účtu (limit na `chat_id`) |
 | T8 | M7 | — | zálohy |
+| T9 | M8 | M1 (omezí dopad modelu) | podvržená verze před karanténou, zero-day |

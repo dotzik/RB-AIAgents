@@ -1,0 +1,28 @@
+# Přijaté nálezy auditu závislostí (security/06-provoz-governance.md, 6.1).
+#
+# Výjimka platí jen pro jmenovaný adresář a balíček, má důvod, vlastníka
+# a datum, kdy vyprší. CI (supply-chain.yml) ji předá pip-auditu jako
+# --ignore-vuln, test V37 hlídá, že žádná nevypršela a že není bez důvodu.
+
+[[exception]]
+directory = "HW3/agents/python"
+package = "litellm"
+version = "1.83.0"
+ids = [
+  "PYSEC-2026-388", "PYSEC-2026-391", "PYSEC-2026-2598", "PYSEC-2026-2599",
+  "PYSEC-2026-2600", "PYSEC-2026-2601", "PYSEC-2026-2602", "PYSEC-2026-3476",
+  "PYSEC-2026-3477", "PYSEC-2026-3479", "PYSEC-2026-3861", "PYSEC-2026-4066",
+  "PYSEC-2026-4067", "PYSEC-2026-4070",
+]
+reason = """
+Všechny nálezy jsou v LiteLLM Proxy serveru (endpointy /prompts/test,
+/mcp-rest, /user/update, autentizace proxy). Agent proxy nespouští,
+litellm se načte jen jako knihovna přes HW1 (timeagent.agent → llm)
+kvůli build_system_prompt a nevolá se. Novější litellm chce openai<3
+a tím stáhne pydantic-ai-slim zpět na verzi se známými zranitelnostmi,
+které agent skutečně používá.
+"""
+fix = "Oddělit build_system_prompt v HW1 od llm, nebo litellm v HW1 jako volitelný extra."
+owner = "vlastník systému"
+accepted = 2026-10-16
+expires = 2027-01-16

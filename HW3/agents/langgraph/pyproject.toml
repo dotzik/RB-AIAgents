@@ -23,3 +23,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/lgagent"]
+
+[tool.uv]
+# Karanténa nových verzí 7 dní (supply chain, security/04-mitigace.md, M8).
+exclude-newer = "7 days"

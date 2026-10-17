@@ -15,6 +15,9 @@ rozhodnutí jsou pojmenovaná zvlášť.
 
 **Přijatá rizika** (vlastník, 2026-10-14): T7 s limitem zpráv; zbytkové T3
 uvnitř dat téhož klienta; důvěra v n8n jako prostředníka (kap. 4.2).
+Od 2026-10-16 i zbytek T9: podvržená verze, která projde karanténou
+7 dní, a zero-day v zamčené verzi; výjimka `litellm` v agentovi Pydantic AI
+do 2027-01-16 (`supply-chain-exceptions.toml`, kap. 4.4).
 
 ## 6.2 Logy a jejich ochrana
 
@@ -44,6 +47,8 @@ nevydá výsledek (V24). Vypnout ho tedy nejde potichu.
 | `role: owner` s `chat_id` z Telegramu mimo obvyklou dobu | převzatý účet vlastníka, nejcitlivější identita | vysoká |
 | `policy_unavailable` | výpadek politiky, služba stojí (fail closed) | střední, provozní |
 | 503 bez záznamu v auditu | audit není nastavený nebo nejde zapsat, služba stojí | střední, provozní (signál je 503 v access logu uvicorn, audit sám zapsat nejde) |
+| `pip-audit` nebo Dependabot nález v `mcp`, `uvicorn`, n8n či LangFlow | zranitelná závislost v cestě k datům (T9) | vysoká u RCE a obejití autentizace, jinak střední |
+| digest modelu nebo image nesedí | podvržení v registru nebo nečekaný update (T9) | vysoká |
 | `allow` od klienta mimo obvyklou dobu nebo v objemu > 10× průměru | převzatý účet klienta | střední |
 
 Kontrola: denní skript nad auditem, u vysoké priority zpráva vlastníkovi.
@@ -56,6 +61,7 @@ Kontrola: denní skript nad auditem, u vysoké priority zpráva vlastníkovi.
 | Ztráta telefonu vlastníka | odebrat jeho `chat_id` z `owner_chat_ids`; správa jde dál přes `owner-cli` | nové `chat_id` po obnově účtu |
 | Únik tokenu služby | smazat hash tokenu v politice, služba dostane 401 | nový token, hash do politiky, záznam do gitu |
 | Kompromitace n8n | zastavit kontejner n8n; MCP a data zůstávají chráněné tokenem | obnova workflow z gitu, nové heslo, nový bot token přes BotFather |
+| Kompromitovaná závislost | zastavit dotčenou službu; vrátit lockfile nebo digest na poslední známou verzi z gitu | rebuild, rotace tajemství, ke kterým služba měla přístup (bot token, tokeny MCP); z auditu zjistit, co služba volala |
 | Únik dat jinému klientovi | zastavit bot; z auditu zjistit, kdo co dostal | oprava, regresní test pro daný případ, informovat dotčeného klienta |
 
 Po incidentu: případ se přidá do testu gate jako nový V-případ, aby se
@@ -72,6 +78,16 @@ nevrátil.
 - Nový nástroj je pro klienty zakázaný, dokud se výslovně nepřidá do
   `CLIENT_TOOLS` s testem.
 - Změna modelu nebo `OLLAMA_BASE_URL` se ověří proti allowlistu (M5).
+  Nový model = nový digest v konfiguraci, commitem.
+- Aktualizace závislostí jen změnou lockfile nebo digestu v gitu: verze
+  starší 7 dní, `pip-audit` bez nálezu, test gate prošel (M8). Žádný
+  `latest`, žádný build bez lockfile.
+- Bezpečnostní oprava může být mladší než karanténa (n8n 2026-10-16).
+  Vlastník pak rozhoduje mezi známou zranitelností a nevyzkoušenou verzí;
+  rozhodnutí patří do commitu s důvodem. Výchozí volba: počkat 7 dní,
+  pokud zranitelná služba není dosažitelná zvenku.
+- Přijetí nálezu jen záznamem v `supply-chain-exceptions.toml` s expirací.
+  Výjimka se po aktualizaci balíčku maže (hlídá test V37).
 
 ## 6.6 Regulace
 
@@ -87,4 +103,6 @@ nevrátil.
 |---|---|---|
 | Test gate V0–V13, V21–V25 | 2026-10-15, 19/19 prošlo; s vypnutým gate 12 padá | při každé změně, minimálně před nasazením |
 | Ruční ověření V14–V20 | zatím nezískáno | při nasazení na Proxmox |
-| Revize threat modelu | 2026-10-15 (skupinové chaty, vlastník přes Telegram, povinný audit) | při přidání nového zdroje dat, nového kanálu nebo při publikování mimo domácí síť |
+| Supply chain V26–V29, V31–V37 | 2026-10-16, vše prošlo; test V31–V37 10/10 | test při každém push (CI), audit každé pondělí |
+| Sken image V30 | 2026-10-16, n8n 32 a LangFlow 3 kritické | každé pondělí (CI); před nasazením musí být n8n bez kritických |
+| Revize threat modelu | 2026-10-16 (supply chain: T9, M8) | při přidání nového zdroje dat, nového kanálu nebo při publikování mimo domácí síť |
