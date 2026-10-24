@@ -12,7 +12,7 @@ RUN dotnet restore TimeAgent.Mcp/TimeAgent.Mcp.csproj --locked-mode
 COPY TimeAgent.Mcp/ TimeAgent.Mcp/
 RUN dotnet publish TimeAgent.Mcp/TimeAgent.Mcp.csproj -c Release -o /app -p:RestoreLockedMode=true
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0@sha256:d5633778c754e89a386882eddf8dbee6942447a8a4b8267c19cf1e1158d0b0ac
+FROM mcr.microsoft.com/dotnet/aspnet:10.0@sha256:8af87eba5e7cdafb1514d7388be287365da97c132509e84dfe252ffd552398ca
 WORKDIR /app
 COPY --from=build /app .
 ENV ASPNETCORE_URLS=http://0.0.0.0:8000
