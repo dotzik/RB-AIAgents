@@ -86,7 +86,7 @@ services:
   # zato je blíž tomu, co je v HW1 napsané v Pythonu.
   # ---------------------------------------------------------------------------
   langflow:
-    image: langflowai/langflow:1.12.0@sha256:65796601f3fc7a39c674671ceaca3bb3a69bd6581d08e2582f15fca2ad4ba6d0
+    image: langflowai/langflow:1.13.0@sha256:ff2716e017f4a4bbb9e83556bf66c3d5d70a1d3eb7cffd893312600ba84e303f
     container_name: hw2-langflow
     restart: unless-stopped
     environment:
