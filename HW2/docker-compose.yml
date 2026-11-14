@@ -43,7 +43,7 @@ services:
   # n8n — integrační nástroj, kterému přibyla AI.
   # ---------------------------------------------------------------------------
   n8n:
-    image: n8nio/n8n:2.38.3@sha256:4b76b9c5a69dc1c0f26bedd21b4e281ac2c84bd88d33857487b9e63dd0a42e87
+    image: n8nio/n8n:2.47.2@sha256:83ec9349e09a8efdb51f7e2729f1f83503c038475747a351772ff6b78838f02a
     container_name: hw2-n8n
     restart: unless-stopped
     environment:
